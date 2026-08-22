@@ -136,3 +136,94 @@ export async function writeAudit(
     // best-effort
   }
 }
+
+// ----------------------------------------------------------------- Plan Limits
+
+/**
+ * Enforce plan limits for a tenant. Returns `null` if allowed, otherwise
+ * returns a 402 NextResponse with a friendly upgrade message.
+ */
+export async function enforcePlanLimit(
+  restaurantId: string,
+  limitKey: 'maxTables' | 'maxMenuItems' | 'maxStaff' | 'maxBranches' | 'maxCategories',
+  incrementBy = 1,
+): Promise<NextResponse | null> {
+  const { db } = await import('@/lib/db')
+  const { checkLimit, getPlan } = await import('@/lib/plans')
+  const restaurant = await db.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: { plan: true, subscriptionStatus: true, suspendedAt: true, trialEndsAt: true },
+  })
+  if (!restaurant) {
+    return fail('Restaurant not found.', 404)
+  }
+
+  // Check suspension / trial expiry
+  if (restaurant.suspendedAt) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Your account is suspended. Contact support to reactivate.',
+        code: 'SUSPENDED',
+      },
+      { status: 402 },
+    )
+  }
+  if (
+    restaurant.plan === 'TRIAL' &&
+    restaurant.trialEndsAt &&
+    new Date(restaurant.trialEndsAt).getTime() < Date.now()
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Your trial has expired. Upgrade your plan to continue.',
+        code: 'TRIAL_EXPIRED',
+      },
+      { status: 402 },
+    )
+  }
+
+  // Count current usage
+  let currentCount = 0
+  switch (limitKey) {
+    case 'maxTables':
+      currentCount = await db.table.count({ where: { restaurantId } })
+      break
+    case 'maxMenuItems':
+      currentCount = await db.menuItem.count({ where: { restaurantId } })
+      break
+    case 'maxStaff':
+      currentCount = await db.user.count({
+        where: {
+          restaurantId,
+          role: { not: 'SUPER_ADMIN' },
+        },
+      })
+      break
+    case 'maxBranches':
+      currentCount = await db.branch.count({ where: { restaurantId } })
+      break
+    case 'maxCategories':
+      currentCount = await db.menuCategory.count({ where: { restaurantId } })
+      break
+  }
+
+  const plan = getPlan(restaurant.plan)
+  const limit = plan.limits[limitKey]
+  if (limit !== null && currentCount + incrementBy > limit) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `You've reached the ${plan.name} plan limit of ${limit} ${limitKey.replace('max', '').toLowerCase()}. Please upgrade to add more.`,
+        code: 'PLAN_LIMIT_EXCEEDED',
+        limit,
+        current: currentCount,
+        plan: restaurant.plan,
+      },
+      { status: 402 },
+    )
+  }
+
+  return null
+}

@@ -6,6 +6,7 @@ import {
   fail,
   scopeRestaurantId,
   writeAudit,
+  enforcePlanLimit,
 } from '@/lib/api-helpers'
 import { menuCategorySchema } from '@/lib/validations'
 
@@ -46,6 +47,10 @@ export async function POST(req: NextRequest) {
     return fail(parsed.error.issues[0]?.message || 'Invalid input.', 422)
   }
   const data = parsed.data
+  // Plan limit enforcement
+  const limitErr = await enforcePlanLimit(restaurantId, 'maxCategories')
+  if (limitErr) return limitErr
+
   const maxSort = await db.menuCategory.aggregate({
     where: { restaurantId },
     _max: { sortOrder: true },

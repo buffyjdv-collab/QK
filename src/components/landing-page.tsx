@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { QrCode, UtensilsCrossed, Zap, BarChart3, BellRing, Loader2 } from 'lucide-react'
+import { QrCode, UtensilsCrossed, Zap, BarChart3, BellRing, Loader2, CheckCircle2, Sparkles, Building2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Separator } from '@/components/ui/separator'
+import { SignupWizard } from './signup-wizard'
+import { PLANS } from '@/lib/plans'
 
 const DEMO_CREDS = [
   { role: 'Owner', email: 'owner@spicegarden.in' },
@@ -24,6 +26,8 @@ export function LandingPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [signupOpen, setSignupOpen] = useState(false)
+  const [billingCycle, setBillingCycle] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY')
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -68,15 +72,27 @@ export function LandingPage() {
               <p className="text-[10px] text-muted-foreground">Restaurant OS</p>
             </div>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => {
-              const el = document.getElementById('login')
-              el?.scrollIntoView({ behavior: 'smooth' })
-            }}
-          >
-            Sign in
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSignupOpen(true)}
+              className="text-orange-700 hover:bg-orange-50"
+            >
+              <Building2 className="mr-1.5 h-4 w-4" />
+              Start free
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const el = document.getElementById('login')
+                el?.scrollIntoView({ behavior: 'smooth' })
+              }}
+            >
+              Sign in
+            </Button>
+          </div>
         </div>
       </nav>
 
@@ -104,6 +120,14 @@ export function LandingPage() {
               <Button
                 size="lg"
                 className="bg-orange-600 text-white hover:bg-orange-700"
+                onClick={() => setSignupOpen(true)}
+              >
+                <Building2 className="mr-2 h-5 w-5" />
+                Start your restaurant — free trial
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
                 onClick={() => {
                   window.location.href = '/?table=sg-5-1tgesbnhbx'
                 }}
@@ -200,6 +224,85 @@ export function LandingPage() {
           />
         </section>
 
+        {/* Pricing */}
+        <section id="pricing" className="py-10">
+          <div className="mb-6 text-center">
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
+              <Sparkles className="h-3 w-3" /> Simple, transparent pricing
+            </span>
+            <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900">
+              Plans that scale with your restaurant
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Start free for 14 days. No credit card required. Cancel anytime.
+            </p>
+            <div className="mt-4 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+              <button
+                onClick={() => setBillingCycle('MONTHLY')}
+                className={`rounded-md px-4 py-1.5 text-xs font-semibold transition-colors ${
+                  billingCycle === 'MONTHLY' ? 'bg-white shadow-sm text-slate-900' : 'text-muted-foreground'
+                }`}
+              >
+                Monthly
+              </button>
+              <button
+                onClick={() => setBillingCycle('YEARLY')}
+                className={`rounded-md px-4 py-1.5 text-xs font-semibold transition-colors ${
+                  billingCycle === 'YEARLY' ? 'bg-white shadow-sm text-slate-900' : 'text-muted-foreground'
+                }`}
+              >
+                Yearly <span className="text-emerald-600">-17%</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Object.values(PLANS).map((plan) => {
+              const price = billingCycle === 'YEARLY' ? plan.yearlyPrice : plan.monthlyPrice
+              const highlight = plan.highlight
+              return (
+                <div
+                  key={plan.id}
+                  className={`relative flex flex-col rounded-2xl border bg-white p-5 ${
+                    highlight ? 'border-orange-600 shadow-lg shadow-orange-100' : 'border-slate-200'
+                  }`}
+                >
+                  {highlight && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-orange-600 px-3 py-0.5 text-[10px] font-bold uppercase text-white">
+                      Most popular
+                    </span>
+                  )}
+                  <p className="text-sm font-bold text-slate-900">{plan.name}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{plan.tagline}</p>
+                  <div className="mt-3">
+                    <span className="text-3xl font-extrabold">₹{price}</span>
+                    <span className="text-xs text-muted-foreground">/mo</span>
+                  </div>
+                  <Button
+                    onClick={() => setSignupOpen(true)}
+                    className={`mt-4 ${
+                      highlight
+                        ? 'bg-orange-600 text-white hover:bg-orange-700'
+                        : 'bg-slate-900 text-white hover:bg-slate-800'
+                    }`}
+                    size="sm"
+                  >
+                    {plan.id === 'TRIAL' ? 'Start free trial' : `Choose ${plan.name}`}
+                  </Button>
+                  <ul className="mt-4 space-y-1.5">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-start gap-1.5 text-xs text-slate-700">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+
         <Separator className="my-6" />
 
         {/* Login */}
@@ -290,6 +393,18 @@ export function LandingPage() {
           </p>
         </footer>
       </main>
+
+      {/* Signup wizard */}
+      <SignupWizard
+        open={signupOpen}
+        onOpenChange={setSignupOpen}
+        onSuccess={() => {
+          // Pre-fill login form so user can immediately sign in
+          setTimeout(() => {
+            // Force a session refresh; signup wizard will call reload
+          }, 100)
+        }}
+      />
     </div>
   )
 }

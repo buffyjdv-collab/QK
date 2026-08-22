@@ -199,3 +199,73 @@ export const settingsSchema = z.object({
     })
     .optional(),
 })
+
+// ============================================================================
+// MULTI-TENANT BUSINESS VALIDATIONS
+// ============================================================================
+
+// Public restaurant signup
+export const signupSchema = z.object({
+  // Restaurant info
+  restaurantName: z.string().min(2).max(120),
+  slug: z
+    .string()
+    .min(2)
+    .max(60)
+    .regex(/^[a-z0-9-]+$/, 'Slug must be lowercase letters, numbers, and hyphens only'),
+  tagline: z.string().max(120).optional(),
+  address: z.string().min(5).max(280),
+  city: z.string().min(2).max(80),
+  phone: z.string().min(6).max(20),
+  email: z.string().email(),
+  // Owner account
+  ownerName: z.string().min(2).max(120),
+  ownerEmail: z.string().email(),
+  ownerPassword: z.string().min(8).max(120),
+  // Plan
+  plan: z.enum(['TRIAL', 'STARTER', 'PRO', 'ENTERPRISE']).default('TRIAL'),
+  billingCycle: z.enum(['MONTHLY', 'YEARLY']).default('MONTHLY'),
+})
+
+// Platform: create tenant (super admin)
+export const platformCreateTenantSchema = z.object({
+  name: z.string().min(2).max(120),
+  slug: z
+    .string()
+    .min(2)
+    .max(60)
+    .regex(/^[a-z0-9-]+$/),
+  tagline: z.string().max(120).optional(),
+  address: z.string().min(5).max(280),
+  city: z.string().min(2).max(80).optional(),
+  phone: z.string().min(6).max(20),
+  email: z.string().email().optional().or(z.literal('')),
+  plan: z.enum(['TRIAL', 'STARTER', 'PRO', 'ENTERPRISE']).default('TRIAL'),
+  billingCycle: z.enum(['MONTHLY', 'YEARLY']).default('MONTHLY'),
+  // Owner
+  ownerName: z.string().min(2).max(120),
+  ownerEmail: z.string().email(),
+  ownerPassword: z.string().min(8).max(120).optional(), // optional: super admin can leave it and invite
+})
+
+// Platform: update tenant
+export const platformUpdateTenantSchema = z.object({
+  name: z.string().min(2).max(120).optional(),
+  tagline: z.string().max(120).optional(),
+  address: z.string().max(280).optional(),
+  city: z.string().max(80).optional(),
+  phone: z.string().max(20).optional(),
+  email: z.string().email().optional().or(z.literal('')),
+  isOpen: z.boolean().optional(),
+  plan: z.enum(['TRIAL', 'STARTER', 'PRO', 'ENTERPRISE']).optional(),
+  subscriptionStatus: z
+    .enum(['TRIALING', 'ACTIVE', 'PAST_DUE', 'SUSPENDED', 'CANCELLED'])
+    .optional(),
+  suspendReason: z.string().max(280).optional(),
+})
+
+// Platform: change plan
+export const changePlanSchema = z.object({
+  plan: z.enum(['TRIAL', 'STARTER', 'PRO', 'ENTERPRISE']),
+  billingCycle: z.enum(['MONTHLY', 'YEARLY']).optional(),
+})

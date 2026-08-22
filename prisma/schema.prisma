@@ -38,6 +38,9 @@ model User {
   handledServiceRequests ServiceRequest[]
   sessions       Session[]
   accounts       Account[]
+  invitationsSent TenantInvitation[] @relation("InvitationsSent")
+  invitationsAccepted TenantInvitation[] @relation("InvitationsAccepted")
+  onboardedRestaurants Restaurant[] @relation("OnboardedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -127,9 +130,13 @@ model Restaurant {
   primaryColor    String   @default("#EA580C")   // warm orange (food-friendly)
   accentColor     String   @default("#16A34A")    // green for veg indicators
 
-  // Subscription / plan
+  // Subscription / plan (legacy fields kept for backward compat; canonical source = Subscription model)
   plan            String   @default("TRIAL")    // TRIAL | STARTER | PRO | ENTERPRISE
   subscriptionStatus String @default("ACTIVE")
+  trialEndsAt     DateTime?
+  suspendedAt     DateTime?
+  suspendedReason String?
+  onboardedById   String?  // super admin who created this tenant (null = self-signup)
 
   users           User[]           @relation("RestaurantStaff")
   branches        Branch[]
@@ -144,6 +151,9 @@ model Restaurant {
   serviceRequests ServiceRequest[]
   settings        RestaurantSettings?
   auditLogs       AuditLog[]
+  subscription    Subscription?
+  invitations     TenantInvitation[]
+  onboardedBy     User?       @relation("OnboardedBy", fields: [onboardedById], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -619,4 +629,88 @@ model AuditLog {
   @@index([restaurantId])
   @@index([userId])
   @@index([entity, entityId])
+}
+
+// ============================================================================
+// MULTI-TENANT BUSINESS MODELS (subscriptions, plans, invitations, platform)
+// ============================================================================
+
+model Subscription {
+  id              String   @id @default(cuid())
+  restaurantId    String   @unique
+  // Plan tier: TRIAL | STARTER | PRO | ENTERPRISE
+  plan            String   @default("TRIAL")
+  // Status: ACTIVE | PAST_DUE | CANCELLED | SUSPENDED | TRIALING
+  status          String   @default("TRIALING")
+  // Billing cycle: MONTHLY | YEARLY
+  billingCycle    String   @default("MONTHLY")
+  // Pricing (in INR paise to avoid float; convert /100 for display)
+  amount          Int      @default(0)
+  currency        String   @default("INR")
+  // Period
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  trialStartsAt     DateTime?
+  trialEndsAt       DateTime?
+  // Cancellation
+  cancelledAt       DateTime?
+  cancelReason      String?
+  // Payment provider (for future expansion)
+  provider          String?  // RAZORPAY | STRIPE
+  providerSubId     String?
+  // Auto-renew
+  autoRenew         Boolean  @default(true)
+
+  restaurant        Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TenantInvitation {
+  id            String   @id @default(cuid())
+  email         String
+  restaurantId  String?
+  // Role the invitee will get once they accept
+  role          String   @default("RESTAURANT_OWNER")
+  // Token for secure acceptance
+  token         String   @unique
+  // Status: PENDING | ACCEPTED | EXPIRED | REVOKED
+  status        String   @default("PENDING")
+  invitedById   String
+  expiresAt     DateTime
+  acceptedAt    DateTime?
+  acceptedById  String?
+
+  restaurant    Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  invitedBy     User        @relation("InvitationsSent", fields: [invitedById], references: [id])
+  acceptedBy    User?       @relation("InvitationsAccepted", fields: [acceptedById], references: [id])
+
+  createdAt DateTime @default(now())
+  @@index([email])
+  @@index([restaurantId])
+  @@index([status])
+}
+
+model PlatformSettings {
+  id            String   @id @default(cuid())
+  // Global platform config (singleton row)
+  platformName  String   @default("QR Dine")
+  supportEmail  String   @default("support@qrdine.com")
+  // Default trial duration (days)
+  defaultTrialDays Int   @default(14)
+  // Default plan when a new tenant signs up
+  defaultPlan   String   @default("TRIAL")
+  // Whether public signup is enabled
+  publicSignupEnabled Boolean @default(true)
+  // Featured plans on the pricing page
+  featuredPlans String   @default("STARTER,PRO")
+  // Platform commission percentage on each transaction (future)
+  commissionRate Float   @default(0.0)
+  // Branding
+  primaryColor  String   @default("#EA580C")
+  logoUrl       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

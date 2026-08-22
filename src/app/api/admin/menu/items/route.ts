@@ -6,6 +6,7 @@ import {
   fail,
   scopeRestaurantId,
   writeAudit,
+  enforcePlanLimit,
 } from '@/lib/api-helpers'
 import { menuItemSchema } from '@/lib/validations'
 
@@ -59,6 +60,10 @@ export async function POST(req: NextRequest) {
   if (!cat || cat.restaurantId !== restaurantId) {
     return fail('Invalid category.', 422)
   }
+
+  // Plan limit enforcement
+  const limitErr = await enforcePlanLimit(restaurantId, 'maxMenuItems')
+  if (limitErr) return limitErr
 
   const item = await db.menuItem.create({
     data: {

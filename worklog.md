@@ -79,3 +79,50 @@ Stage Summary:
 - End-to-end acceptance test PASSED: customer scan → menu → customize → cart → place order → kitchen receives → status transitions → bill → payment → completed → appears in reports.
 - Preview screenshots saved to /home/z/my-project/download/ for: customer menu, cart, admin dashboard, kitchen display, orders, tables & QR, menu manager, reports.
 - Project ready for delivery.
+
+---
+Task ID: mt-1 to mt-13
+Agent: Main (Super Z) — multi-tenant business model upgrade
+Task: Transform single-tenant demo into multi-tenant SaaS business model
+
+Work Log:
+- Extended Prisma schema: added Subscription, TenantInvitation, PlatformSettings models; added trialEndsAt/suspendedAt/suspendedReason/onboardedById fields to Restaurant; added back-relations on User
+- Created src/lib/plans.ts with 4 plan tiers (TRIAL/STARTER/PRO/ENTERPRISE) — each defines hard limits (maxTables, maxMenuItems, maxStaff, maxBranches, maxCategories) and capabilities (onlinePayment, advancedReports, customBranding, multiBranch, apiAccess, auditLogs, prioritySupport)
+- Created src/lib/tenant.ts with TenantContext helpers for super-admin "view as" feature
+- Created src/lib/format.ts with shared INR/date formatters
+- Extended src/lib/validations.ts with signupSchema, platformCreateTenantSchema, platformUpdateTenantSchema, changePlanSchema
+- Added enforcePlanLimit() helper to api-helpers.ts — checks suspension, trial expiry, and per-plan count limits; returns 402 with PLAN_LIMIT_EXCEEDED code on violation
+- Wired enforcePlanLimit into POST /api/admin/tables, /api/admin/menu/items, /api/admin/menu/categories, /api/admin/staff
+- Created public signup endpoint POST /api/auth/signup — atomically creates Restaurant + Branch + Owner User + Subscription + default Table T1 + 3 starter categories in a transaction
+- Created GET /api/platform/check-slug for real-time slug availability check
+- Created platform super-admin API routes:
+  * GET/POST /api/platform/restaurants (list all tenants, create new)
+  * GET/PATCH/DELETE /api/platform/restaurants/[id] (manage single tenant)
+  * POST /api/platform/restaurants/[id]/suspend (with reason)
+  * POST /api/platform/restaurants/[id]/activate (restore)
+  * GET/POST /api/platform/restaurants/[id]/plan (change subscription plan)
+  * GET /api/platform/metrics (platform-wide KPIs: tenant counts, GMV, orders today, 14-day trend, top 10 tenants, payment method breakdown, plan distribution)
+  * GET /api/platform/users (list all users across all tenants)
+- Created platform UI components:
+  * src/components/platform/platform-dashboard.tsx — KPIs, plan distribution, 14-day orders chart (Recharts area), top 10 tenants by revenue, payment method breakdown
+  * src/components/platform/platform-restaurants-manager.tsx — searchable/filterable tenant list with suspend/activate actions, create-tenant dialog, suspend-with-reason dialog, tenant detail dialog showing usage vs plan limits
+  * src/components/platform/platform-users-manager.tsx — searchable user list with role filter
+- Updated src/components/sidebar.tsx — added "Platform" section (super-admin only) with 4 nav items above the "Restaurant" section, with distinct dark-slate styling for platform items
+- Updated src/components/app-shell.tsx — routes platform-* hash views; SUPER_ADMIN defaults to 'platform-dashboard' on login
+- Created src/components/signup-wizard.tsx — 3-step modal wizard (Restaurant info → Owner account → Plan selection) with progress bar, billing cycle toggle (monthly/yearly), plan comparison cards, success screen
+- Updated src/components/landing-page.tsx — added "Start free" CTA in nav, "Start your restaurant — free trial" hero button, full pricing section with 4 plans + monthly/yearly toggle + "Most popular" highlight on PRO plan
+- Verified end-to-end:
+  * Lint: 0 errors, 0 warnings
+  * Public signup creates new tenant (tested via curl: Pizza Palace tenant created with TRIAL plan, 14-day trial, owner marco@pizzapalace.in)
+  * Super admin sees both tenants (Spice Garden + Pizza Palace) in Tenants list with plan/status badges
+  * Super admin platform dashboard shows KPIs, plan distribution, top tenants by revenue
+  * Plan limit enforcement: signed in as Pizza Palace owner (TRIAL plan, max 5 tables), successfully created T2-T5 (5 total), T6 and T7 rejected with 402 PLAN_LIMIT_EXCEEDED error
+  * Tenant onboarding creates default table T1 + 3 categories (Starters, Main Course, Beverages) so new restaurants aren't empty
+
+Stage Summary:
+- SaaS is now a true multi-tenant business model: public self-signup, subscription plans with hard limits, super-admin platform console, tenant suspension/activation, plan changes
+- 4 plans defined: TRIAL (free, 14 days, 5 tables) / STARTER (₹1,499/mo, 15 tables) / PRO (₹3,999/mo, 60 tables, most popular) / ENTERPRISE (₹9,999/mo, unlimited)
+- All tenant data is isolated via restaurantId; super admin can view platform-wide metrics
+- Plan limits enforced at API layer on tables, menu items, categories, staff creation
+- Tenant suspension blocks all create operations (returns 402 SUSPENDED)
+- Trial expiry blocks all create operations (returns 402 TRIAL_EXPIRED)

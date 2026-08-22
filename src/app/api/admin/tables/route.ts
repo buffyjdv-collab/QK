@@ -7,6 +7,7 @@ import {
   scopeRestaurantId,
   writeAudit,
   generateToken,
+  enforcePlanLimit,
 } from '@/lib/api-helpers'
 import { tableSchema } from '@/lib/validations'
 
@@ -68,6 +69,10 @@ export async function POST(req: NextRequest) {
     where: { restaurantId_number: { restaurantId, number: data.number } },
   })
   if (existing) return fail(`Table ${data.number} already exists.`, 409)
+
+  // Plan limit enforcement
+  const limitErr = await enforcePlanLimit(restaurantId, 'maxTables')
+  if (limitErr) return limitErr
 
   const table = await db.table.create({
     data: {

@@ -15,6 +15,9 @@ import { BillingManager } from './admin/billing-manager'
 import { KitchenDisplay } from './kitchen/kitchen-display'
 import { WaiterDashboard } from './waiter/waiter-dashboard'
 import { ServiceRequestsWidget } from './admin/service-requests-widget'
+import { PlatformDashboard } from './platform/platform-dashboard'
+import { PlatformRestaurantsManager } from './platform/platform-restaurants-manager'
+import { PlatformUsersManager } from './platform/platform-users-manager'
 import { Menu as MenuIcon, BellRing } from 'lucide-react'
 import { useSocketEvent } from '@/hooks/use-socket'
 import { useQueryClient } from '@tanstack/react-query'
@@ -35,7 +38,9 @@ export function AppShell() {
       } else {
         // Default per role
         const def =
-          role === 'KITCHEN_STAFF'
+          role === 'SUPER_ADMIN'
+            ? 'platform-dashboard'
+            : role === 'KITCHEN_STAFF'
             ? 'kitchen'
             : role === 'WAITER'
             ? 'waiter'
@@ -146,6 +151,12 @@ export function AppShell() {
         </header>
 
         <main className="flex-1 overflow-y-auto">
+          {hash === 'platform-dashboard' && (
+            <PlatformDashboard onNavigate={(k) => { window.location.hash = k; setHash(k) }} />
+          )}
+          {hash === 'platform-restaurants' && <PlatformRestaurantsManager />}
+          {hash === 'platform-users' && <PlatformUsersManager />}
+          {hash === 'platform-plans' && <PlatformRestaurantsManager />}
           {hash === 'dashboard' && <Dashboard />}
           {hash === 'orders' && <OrdersManager />}
           {hash === 'menu' && <MenuManager />}

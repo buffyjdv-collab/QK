@@ -7,6 +7,7 @@ import {
   fail,
   scopeRestaurantId,
   writeAudit,
+  enforcePlanLimit,
 } from '@/lib/api-helpers'
 import { staffCreateSchema } from '@/lib/validations'
 import { canAccessRole } from '@/lib/auth'
@@ -92,6 +93,12 @@ export async function POST(req: NextRequest) {
 
   if (data.role !== 'SUPER_ADMIN' && !finalRestaurantId) {
     return fail('Restaurant is required for this role.', 400)
+  }
+
+  // Plan limit enforcement (skip for SUPER_ADMIN creation — platform-level)
+  if (data.role !== 'SUPER_ADMIN' && finalRestaurantId) {
+    const limitErr = await enforcePlanLimit(finalRestaurantId, 'maxStaff')
+    if (limitErr) return limitErr
   }
 
   const passwordHash = await bcrypt.hash(data.password, 10)
