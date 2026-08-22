@@ -65,6 +65,12 @@ export async function POST(req: NextRequest) {
     },
   })
 
+  // Mark platform fee as COLLECTED
+  await db.platformFee.updateMany({
+    where: { orderId: order.id, status: 'PENDING' },
+    data: { status: 'COLLECTED', collectedAt: new Date() },
+  })
+
   // Generate invoice if not exists
   let invoice = await db.invoice.findFirst({ where: { orderId: order.id } })
   if (!invoice) {

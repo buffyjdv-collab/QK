@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requirePermission, fail, scopeRestaurantId } from '@/lib/api-helpers'
+import { resolveDateRange } from '@/lib/date-range'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +14,7 @@ function csvEscape(s: string | null | undefined): string {
   return str
 }
 
-// GET /api/admin/reports/export?from=&to=&format=csv
+// GET /api/admin/reports/export?range=7d&from=&to=&format=csv
 export async function GET(req: NextRequest) {
   const { user, error } = await requirePermission('reports.view')
   if (error) return error
@@ -21,9 +22,15 @@ export async function GET(req: NextRequest) {
   const restaurantId = scopeRestaurantId(user, req.nextUrl.searchParams.get('restaurantId'))
 
   const sp = req.nextUrl.searchParams
-  const from = sp.get('from') ? new Date(sp.get('from') as string) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-  const to = sp.get('to') ? new Date(sp.get('to') as string) : new Date()
-  to.setHours(23, 59, 59, 999)
+  const range = sp.get('range') || '7d'
+  let dateRange
+  try {
+    dateRange = resolveDateRange(range, sp.get('from'), sp.get('to'))
+  } catch (e: any) {
+    return fail(e.message, 400)
+  }
+  const from = dateRange.from
+  const to = dateRange.to
 
   const orders = await db.order.findMany({
     where: {
@@ -49,7 +56,10 @@ export async function GET(req: NextRequest) {
     'Tax',
     'Service Charge',
     'Discount',
+    'Refund',
     'Grand Total',
+    'Net Total',
+    'Platform Fee',
   ].join(',')
 
   const rows = orders.map((o) =>
@@ -65,7 +75,10 @@ export async function GET(req: NextRequest) {
       o.taxAmount.toFixed(2),
       o.serviceCharge.toFixed(2),
       o.discountAmount.toFixed(2),
+      o.refundAmount.toFixed(2),
       o.grandTotal.toFixed(2),
+      o.netTotal.toFixed(2),
+      o.platformFeeAmount.toFixed(2),
     ].join(','),
   )
 

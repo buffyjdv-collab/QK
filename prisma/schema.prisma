@@ -41,6 +41,7 @@ model User {
   invitationsSent TenantInvitation[] @relation("InvitationsSent")
   invitationsAccepted TenantInvitation[] @relation("InvitationsAccepted")
   onboardedRestaurants Restaurant[] @relation("OnboardedBy")
+  platformFeeConfigUpdates PlatformFeeConfig[] @relation("PlatformFeeConfigUpdatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -154,6 +155,7 @@ model Restaurant {
   subscription    Subscription?
   invitations     TenantInvitation[]
   onboardedBy     User?       @relation("OnboardedBy", fields: [onboardedById], references: [id])
+  platformFees    PlatformFee[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -378,7 +380,16 @@ model Order {
   serviceCharge Float    @default(0)
   discountAmount Float   @default(0)
   discountCode  String?
-  grandTotal    Float    @default(0)
+  refundAmount  Float    @default(0)   // amount refunded (partial or full)
+  refundedAt    DateTime?
+  refundReason  String?
+  grandTotal    Float    @default(0)   // original grand total (pre-refund)
+  netTotal      Float    @default(0)   // grandTotal - refundAmount (actual collected)
+
+  // Platform fee snapshot (stored at order time for audit)
+  platformFeeAmount Float @default(0)
+  platformFeeBase   Float @default(0)   // the base the fee was calculated on
+  platformFeePayer  String? // RESTAURANT | CUSTOMER | SPLIT
 
   // Staff who handled the order
   acceptedById  String?
@@ -403,6 +414,7 @@ model Order {
   payments      Payment[]
   invoices      Invoice[]
   serviceRequests ServiceRequest[]
+  platformFee   PlatformFee?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -713,4 +725,77 @@ model PlatformSettings {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ============================================================================
+// PLATFORM FEE / COMMISSION SYSTEM
+// ============================================================================
+
+model PlatformFeeConfig {
+  id              String   @id @default(cuid())
+  // Singleton — only one row exists
+  // Fee Type: PERCENTAGE | FIXED_PER_ORDER | MONTHLY_SUBSCRIPTION | HYBRID
+  feeType         String   @default("PERCENTAGE")
+  // For PERCENTAGE: 0.5 means 0.5%
+  // For FIXED_PER_ORDER: amount in paise (e.g. 500 = ₹5)
+  // For MONTHLY_SUBSCRIPTION: monthly amount in paise
+  // For HYBRID: percentage + fixed amount both apply
+  percentageRate  Float    @default(0.5)   // %
+  fixedAmount     Int      @default(0)     // paise
+  monthlyAmount   Int      @default(0)     // paise (for monthly subscription)
+
+  // Fee Applies To: FOOD_SUBTOTAL | DISCOUNTED_SUBTOTAL | TOTAL_EXCLUDING_TAX | TOTAL_INCLUDING_TAX
+  appliesTo       String   @default("TOTAL_EXCLUDING_TAX")
+
+  // Caps (in paise; null = no cap)
+  minimumFee      Int      @default(0)     // paise
+  maximumFee      Int?                     // paise; null = unlimited
+
+  // Who Pays: RESTAURANT | CUSTOMER | SPLIT
+  payer           String   @default("RESTAURANT")
+  // For SPLIT mode: percentage paid by customer (rest by restaurant)
+  customerSplitPct Float   @default(50)    // 0-100
+
+  // Per-plan overrides (JSON string): { "TRIAL": {feeType, percentageRate, ...}, ... }
+  // If a plan key is present, it overrides the global config for that plan
+  planOverrides   String?
+
+  // Status
+  active          Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
+  updatedById     String?
+
+  updatedBy       User?    @relation("PlatformFeeConfigUpdatedBy", fields: [updatedById], references: [id])
+}
+
+model PlatformFee {
+  id              String   @id @default(cuid())
+  orderId         String   @unique
+  restaurantId    String
+  // Snapshot of config at time of order
+  feeType         String
+  percentageRate  Float    @default(0)
+  fixedAmount     Int      @default(0)
+  // Calculation
+  baseAmount      Float    // the base the fee was calculated on (in rupees)
+  grossFee        Float    // fee before min/max caps
+  feeAmount       Float    // final fee after caps (in rupees)
+  payer           String   // RESTAURANT | CUSTOMER | SPLIT
+  customerPortion Float    @default(0)   // portion paid by customer
+  restaurantPortion Float  @default(0)   // portion paid by restaurant
+  // Status: PENDING | COLLECTED | REFUNDED | WAIVED
+  status          String   @default("PENDING")
+  collectedAt     DateTime?
+  refundedAt      DateTime?
+  refundReason    String?
+
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId])
+  @@index([status])
+  @@index([createdAt])
 }

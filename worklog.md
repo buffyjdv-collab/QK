@@ -126,3 +126,50 @@ Stage Summary:
 - Plan limits enforced at API layer on tables, menu items, categories, staff creation
 - Tenant suspension blocks all create operations (returns 402 SUSPENDED)
 - Trial expiry blocks all create operations (returns 402 TRIAL_EXPIRED)
+
+---
+Task ID: r-1 to r-12
+Agent: Main (Super Z) — revenue reports + platform fee system
+Task: Implement 4 revenue reports (Sales/Products/Categories/Payments) + full platform fee engine
+
+Work Log:
+- Extended Prisma schema: added refundAmount, refundedAt, refundReason, netTotal, platformFeeAmount, platformFeeBase, platformFeePayer to Order model; added PlatformFeeConfig (singleton config) and PlatformFee (per-order fee record) models
+- Created src/lib/platform-fee.ts — fee calculation engine supporting:
+  * 4 fee types: PERCENTAGE, FIXED_PER_ORDER, MONTHLY_SUBSCRIPTION, HYBRID
+  * 4 application bases: FOOD_SUBTOTAL, DISCOUNTED_SUBTOTAL, TOTAL_EXCLUDING_TAX, TOTAL_INCLUDING_TAX
+  * Min/max caps (in paise)
+  * 3 payer modes: RESTAURANT, CUSTOMER, SPLIT (with configurable customer split %)
+  * describeFeeConfig() helper for human-readable config display
+- Created src/lib/date-range.ts — shared date range resolver supporting today/yesterday/7d/30d/thisMonth/lastMonth/custom
+- Wired platform fee calculation into POST /api/customer/order — creates PlatformFee record per order (skipped for monthly subscription)
+- Wired platform fee status update into POST /api/customer/payment/verify — marks fee as COLLECTED when payment verified
+- Created 4 report API routes:
+  * GET /api/admin/reports/sales — daily rows: Date | Orders | Gross | Discount | Refund | Net | Tax | Total
+  * GET /api/admin/reports/products — Item | Qty | Gross | Discount | Net + topSelling + topRevenue rankings
+  * GET /api/admin/reports/categories — per-category revenue + percentage of total
+  * GET /api/admin/reports/payments — by method (UPI/Card/Cash/Counter/Wallet) + by status (Successful/Pending/Failed/Refunded)
+- Updated GET /api/admin/reports/export to support new range types + include refund, netTotal, platformFeeAmount columns
+- Created platform fee config API:
+  * GET /api/platform/fee-config — returns current config (any signed-in user can read; needed for invoice display)
+  * PATCH /api/platform/fee-config — super admin only; deactivates old config + creates new active config
+- Created GET /api/platform/fees — super admin view of fees collected per tenant, by fee type, by payer, recent transactions
+- Rebuilt src/components/admin/reports-manager.tsx with 4 tabs (Sales/Products/Categories/Payments), each with KPI cards, charts, and detailed tables
+- Created src/components/platform/platform-fee-config.tsx — full fee configuration UI with:
+  * 4 fee type cards (Percentage/Fixed/Monthly/Hybrid) with icons
+  * Conditional fields based on fee type
+  * 4 application base options
+  * Min/max cap inputs
+  * 3 payer options (with split % slider when SPLIT selected)
+  * Live preview showing example fees for ₹500/₹1000/₹2500 orders
+- Created src/components/platform/platform-fees-collected.tsx — super admin fees dashboard with KPIs, top tenants bar chart, payer pie chart, by-tenant table, recent transactions table
+- Updated Sidebar: added "Platform Fees" and "Fee Configuration" nav items in platform section
+- Updated AppShell: routes platform-fees and platform-fee-config hash views
+
+Stage Summary:
+- All 4 revenue reports implemented and verified end-to-end via browser
+- Platform fee engine fully functional: tested by placing order SPGA-000008 (subtotal ₹598, fee ₹2.99 = 0.5% of total excluding tax, restaurant pays)
+- Fee config UI accessible to super admin at #platform-fee-config
+- Fees collected view shows pending ₹2.99 fee for Spice Garden
+- Default fee config: 0.5% of total excluding tax, restaurant pays, min ₹0, no max
+- All fee amounts stored as snapshots on order (audit trail) — even if config changes later, historical orders retain their original fee calculation
+- Lint: 0 errors, 0 warnings

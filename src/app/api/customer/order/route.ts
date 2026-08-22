@@ -8,6 +8,7 @@ import {
 } from '@/lib/api-helpers'
 import { createOrderSchema } from '@/lib/validations'
 import { publishRealtime } from '@/lib/realtime-server'
+import { getPlatformFeeConfig, calculateOrderFee } from '@/lib/platform-fee'
 
 export const dynamic = 'force-dynamic'
 
@@ -174,6 +175,14 @@ export async function POST(req: NextRequest) {
     serviceCharge -
     discountAmount
   ).toFixed(2)
+  const netTotal = grandTotal // no refund yet
+
+  // Calculate platform fee
+  const feeConfig = await getPlatformFeeConfig()
+  const fee = calculateOrderFee(
+    { subtotal, discountAmount, taxAmount, serviceCharge, grandTotal },
+    feeConfig,
+  )
 
   // Order number — increment from current count for restaurant
   const orderCount = await db.order.count({
@@ -233,6 +242,10 @@ export async function POST(req: NextRequest) {
         serviceCharge,
         discountAmount,
         grandTotal,
+        netTotal,
+        platformFeeAmount: fee.feeAmount,
+        platformFeeBase: fee.baseAmount,
+        platformFeePayer: fee.skipped ? null : fee.payer,
         placedAt: new Date(),
         acceptedById: null,
         servedById: null,
@@ -273,6 +286,26 @@ export async function POST(req: NextRequest) {
       await tx.table.update({
         where: { id: table.id },
         data: { status: 'ORDERING' },
+      })
+    }
+
+    // Create platform fee record (skip for monthly subscription)
+    if (!fee.skipped && fee.feeAmount > 0) {
+      await tx.platformFee.create({
+        data: {
+          orderId: order.id,
+          restaurantId: restaurant.id,
+          feeType: fee.feeType,
+          percentageRate: fee.percentageRate,
+          fixedAmount: fee.fixedAmount,
+          baseAmount: fee.baseAmount,
+          grossFee: fee.grossFee,
+          feeAmount: fee.feeAmount,
+          payer: fee.payer,
+          customerPortion: fee.customerPortion,
+          restaurantPortion: fee.restaurantPortion,
+          status: 'PENDING',
+        },
       })
     }
 

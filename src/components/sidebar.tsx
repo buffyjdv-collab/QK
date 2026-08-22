@@ -38,6 +38,8 @@ const NAV: NavItem[] = [
   { key: 'platform-dashboard', label: 'Platform Overview', icon: Globe2, group: 'platform', permission: 'restaurants.manage' },
   { key: 'platform-restaurants', label: 'Tenants', icon: Building2, group: 'platform', permission: 'restaurants.manage' },
   { key: 'platform-users', label: 'All Users', icon: Users, group: 'platform', permission: 'restaurants.manage' },
+  { key: 'platform-fees', label: 'Platform Fees', icon: CreditCard, group: 'platform', permission: 'restaurants.manage' },
+  { key: 'platform-fee-config', label: 'Fee Configuration', icon: CreditCard, group: 'platform', permission: 'restaurants.manage' },
   { key: 'platform-plans', label: 'Plans & Billing', icon: CreditCard, group: 'platform', permission: 'restaurants.manage' },
 
   // Restaurant-level

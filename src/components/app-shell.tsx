@@ -18,6 +18,8 @@ import { ServiceRequestsWidget } from './admin/service-requests-widget'
 import { PlatformDashboard } from './platform/platform-dashboard'
 import { PlatformRestaurantsManager } from './platform/platform-restaurants-manager'
 import { PlatformUsersManager } from './platform/platform-users-manager'
+import { PlatformFeeConfig } from './platform/platform-fee-config'
+import { PlatformFeesCollected } from './platform/platform-fees-collected'
 import { Menu as MenuIcon, BellRing } from 'lucide-react'
 import { useSocketEvent } from '@/hooks/use-socket'
 import { useQueryClient } from '@tanstack/react-query'
@@ -156,6 +158,8 @@ export function AppShell() {
           )}
           {hash === 'platform-restaurants' && <PlatformRestaurantsManager />}
           {hash === 'platform-users' && <PlatformUsersManager />}
+          {hash === 'platform-fees' && <PlatformFeesCollected />}
+          {hash === 'platform-fee-config' && <PlatformFeeConfig />}
           {hash === 'platform-plans' && <PlatformRestaurantsManager />}
           {hash === 'dashboard' && <Dashboard />}
           {hash === 'orders' && <OrdersManager />}
