@@ -1,0 +1,622 @@
+// QR-Based Restaurant Quick Order System — Prisma Schema
+// Multi-tenant SaaS platform with RBAC, real-time orders, payments, billing, reports
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// AUTH & USERS & RBAC
+// ============================================================================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  passwordHash  String
+  phone         String?
+  avatar        String?
+  // Role: SUPER_ADMIN | RESTAURANT_OWNER | MANAGER | KITCHEN_STAFF | WAITER | CASHIER
+  role          String   @default("WAITER")
+  active        Boolean  @default(true)
+  // Tenant isolation: a super admin has no restaurantId; everyone else is scoped
+  restaurantId  String?
+  branchId      String?
+
+  restaurant    Restaurant? @relation("RestaurantStaff", fields: [restaurantId], references: [id], onDelete: Cascade)
+  branch        Branch?     @relation("BranchStaff",   fields: [branchId],   references: [id], onDelete: Cascade)
+
+  ordersHandled  Order[]    @relation("AcceptedOrders")
+  servedOrders   Order[]    @relation("ServedOrders")
+  paymentsProcessed Payment[]
+  auditLogs      AuditLog[]
+  handledServiceRequests ServiceRequest[]
+  sessions       Session[]
+  accounts       Account[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId])
+  @@index([branchId])
+  @@index([role])
+}
+
+// NextAuth required models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================================================
+// MULTI-TENANT RESTAURANT MODEL
+// ============================================================================
+
+model Restaurant {
+  id              String   @id @default(cuid())
+  slug            String   @unique   // URL slug used in QR codes
+  name            String
+  logo            String?
+  tagline         String?
+  description     String?
+  address         String
+  city            String?
+  state           String?
+  postalCode      String?
+  phone           String
+  email           String?
+  website         String?
+
+  // Tax & billing
+  gstNumber       String?
+  panNumber       String?
+  currency        String   @default("INR")
+  currencySymbol  String   @default("₹")
+  taxRate         Float    @default(0.05)   // 5% GST default
+  serviceChargeRate Float  @default(0.00)   // optional service charge
+
+  // Hours
+  openingTime     String   @default("09:00")
+  closingTime     String   @default("23:00")
+  isOpen          Boolean  @default(true)
+
+  // Payment methods accepted
+  acceptUpi       Boolean  @default(true)
+  acceptCard      Boolean  @default(true)
+  acceptCash      Boolean  @default(true)
+  acceptCounter   Boolean  @default(true)
+
+  // Theme
+  primaryColor    String   @default("#EA580C")   // warm orange (food-friendly)
+  accentColor     String   @default("#16A34A")    // green for veg indicators
+
+  // Subscription / plan
+  plan            String   @default("TRIAL")    // TRIAL | STARTER | PRO | ENTERPRISE
+  subscriptionStatus String @default("ACTIVE")
+
+  users           User[]           @relation("RestaurantStaff")
+  branches        Branch[]
+  tables          Table[]
+  menuCategories  MenuCategory[]
+  menuItems       MenuItem[]
+  modifierGroups  ModifierGroup[]
+  orders          Order[]
+  customers       Customer[]
+  payments        Payment[]
+  invoices        Invoice[]
+  serviceRequests ServiceRequest[]
+  settings        RestaurantSettings?
+  auditLogs       AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Branch {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  name          String   // e.g. "Downtown", "Airport"
+  address       String
+  phone         String?
+  active        Boolean  @default(true)
+
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  users         User[]     @relation("BranchStaff")
+  tables        Table[]
+  orders        Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId])
+}
+
+// ============================================================================
+// TABLES & QR CODES
+// ============================================================================
+
+model Table {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  branchId      String?
+  number        String   // Display number e.g. "T1", "5", "Patio-2"
+  label         String?  // Optional friendly name
+  capacity      Int      @default(4)
+  active        Boolean  @default(true)
+  qrCodeToken   String   @unique   // random token used in QR URL for security
+  // Status: AVAILABLE | OCCUPIED | ORDERING | FOOD_PREPARING | BILL_REQUESTED | PAYMENT_PENDING | COMPLETED
+  status        String   @default("AVAILABLE")
+
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branch        Branch?    @relation(fields: [branchId],   references: [id], onDelete: SetNull)
+  orders        Order[]
+  serviceRequests ServiceRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([restaurantId, number])
+  @@index([restaurantId])
+  @@index([status])
+}
+
+// ============================================================================
+// MENU STRUCTURE (categories → items → variants & modifiers)
+// ============================================================================
+
+model MenuCategory {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  name          String   // Starters, Biryani, Main Course, Breads, Beverages, Desserts
+  description   String?
+  icon          String?  // emoji or icon name
+  sortOrder     Int      @default(0)
+  active        Boolean  @default(true)
+
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuItems     MenuItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId])
+}
+
+model MenuItem {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  categoryId    String
+  name          String
+  description   String?
+  image         String?  // URL or base64
+  // Type
+  isVeg         Boolean  @default(true)
+  isSpicy       Boolean  @default(false)
+  // Pricing
+  basePrice     Float    // in INR
+  taxRate       Float    @default(0.05)  // overrides restaurant default if needed
+  // State
+  available     Boolean  @default(true)
+  soldOut       Boolean  @default(false)
+  // Featured / popular
+  isFeatured    Boolean  @default(false)
+  isPopular     Boolean  @default(false)
+  // Scheduling
+  availableFrom String?  // "09:00"
+  availableTo   String?  // "23:00"
+  // Tags
+  tags          String?  // comma-separated: "bestseller, chef-special"
+  sortOrder     Int      @default(0)
+  // Prep time estimate (minutes)
+  prepTime      Int      @default(15)
+
+  restaurant    Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  category      MenuCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  variants      MenuVariant[]
+  modifierGroups ModifierGroup[] @relation("ItemModifierGroups")
+  orderItems    OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId])
+  @@index([categoryId])
+  @@index([available])
+  @@index([soldOut])
+}
+
+model MenuVariant {
+  id            String   @id @default(cuid())
+  menuItemId    String
+  name          String   // Regular, Large, Half, Full
+  priceModifier Float    @default(0)   // additive (e.g. +50 for Large)
+  sortOrder     Int      @default(0)
+  isDefault     Boolean  @default(false)
+
+  menuItem      MenuItem  @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  orderItems    OrderItem[]
+
+  createdAt DateTime @default(now())
+  @@index([menuItemId])
+}
+
+// Modifier groups: e.g. "Add-ons", "Spice Level", "Size", "Sauces"
+model ModifierGroup {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  menuItemId    String?  // null = available restaurant-wide
+  name          String   // "Add-ons", "Spice Level"
+  description   String?
+  // Selection type: SINGLE | MULTIPLE
+  selectionType String   @default("SINGLE")
+  required      Boolean  @default(false)
+  minSelection  Int      @default(0)
+  maxSelection  Int      @default(1)
+  sortOrder     Int      @default(0)
+
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  menuItem      MenuItem?  @relation("ItemModifierGroups", fields: [menuItemId], references: [id], onDelete: Cascade)
+  modifiers     Modifier[]
+
+  createdAt DateTime @default(now())
+  @@index([restaurantId])
+  @@index([menuItemId])
+}
+
+model Modifier {
+  id            String   @id @default(cuid())
+  groupId       String
+  name          String   // "Extra Cheese", "Medium Spicy"
+  price         Float    @default(0)
+  isDefault     Boolean  @default(false)
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
+
+  group         ModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  orderItemModifiers OrderItemModifier[]
+
+  createdAt DateTime @default(now())
+  @@index([groupId])
+}
+
+// ============================================================================
+// CUSTOMERS (lightweight — no account required to order)
+// ============================================================================
+
+model Customer {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  name          String?
+  phone         String?
+  email         String?
+  // Optional session identifier for guests
+  sessionToken  String?
+
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  orders        Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId])
+  @@index([phone])
+}
+
+// ============================================================================
+// ORDERS & ORDER ITEMS
+// ============================================================================
+
+model Order {
+  id            String   @id @default(cuid())
+  orderNumber   String   // human-friendly: SG-000001
+  restaurantId  String
+  branchId      String?
+  tableId       String
+  customerId    String?
+  // Status: NEW | ACCEPTED | PREPARING | READY | SERVED | COMPLETED | CANCELLED
+  status        String   @default("NEW")
+  // Payment status: PENDING | PROCESSING | PAID | FAILED | REFUNDED
+  paymentStatus String   @default("PENDING")
+  // Payment method: UPI | CARD | CASH | COUNTER | WALLET
+  paymentMethod String?
+
+  // Special instructions from customer
+  notes         String?
+  // Idempotency key to prevent duplicate order submission
+  idempotencyKey String? @unique
+
+  // Pricing (server-validated)
+  subtotal      Float    @default(0)
+  taxAmount     Float    @default(0)
+  serviceCharge Float    @default(0)
+  discountAmount Float   @default(0)
+  discountCode  String?
+  grandTotal    Float    @default(0)
+
+  // Staff who handled the order
+  acceptedById  String?
+  servedById    String?
+
+  // Timing
+  placedAt      DateTime @default(now())
+  acceptedAt    DateTime?
+  preparingAt   DateTime?
+  readyAt       DateTime?
+  servedAt      DateTime?
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branch        Branch?    @relation(fields: [branchId],   references: [id], onDelete: SetNull)
+  table         Table      @relation(fields: [tableId],    references: [id], onDelete: Cascade)
+  customer      Customer?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  acceptedBy    User?      @relation("AcceptedOrders", fields: [acceptedById], references: [id])
+  servedBy      User?      @relation("ServedOrders",   fields: [servedById],   references: [id])
+  items         OrderItem[]
+  payments      Payment[]
+  invoices      Invoice[]
+  serviceRequests ServiceRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId])
+  @@index([tableId])
+  @@index([status])
+  @@index([paymentStatus])
+  @@index([placedAt])
+}
+
+model OrderItem {
+  id            String   @id @default(cuid())
+  orderId       String
+  menuItemId    String
+  menuItemName  String   // snapshot at order time
+  menuItemImage String?
+  variantId     String?
+  variantName   String?
+  quantity      Int      @default(1)
+  // Pricing per unit (server-validated)
+  basePrice     Float
+  variantPrice  Float    @default(0)
+  modifiersTotal Float   @default(0)
+  unitPrice     Float    // basePrice + variantPrice + modifiersTotal
+  totalPrice    Float    // unitPrice * quantity
+  // Snapshot
+  isVeg         Boolean
+  notes         String?  // per-item notes
+
+  order         Order    @relation(fields: [orderId],     references: [id], onDelete: Cascade)
+  menuItem      MenuItem @relation(fields: [menuItemId],  references: [id])
+  variant       MenuVariant? @relation(fields: [variantId], references: [id])
+  modifiers     OrderItemModifier[]
+
+  createdAt DateTime @default(now())
+  @@index([orderId])
+  @@index([menuItemId])
+}
+
+model OrderItemModifier {
+  id            String   @id @default(cuid())
+  orderItemId   String
+  modifierId    String
+  modifierName  String
+  groupName     String
+  price         Float    @default(0)
+
+  orderItem     OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  modifier      Modifier  @relation(fields: [modifierId], references: [id])
+
+  @@index([orderItemId])
+}
+
+// ============================================================================
+// PAYMENTS & INVOICES
+// ============================================================================
+
+model Payment {
+  id            String   @id @default(cuid())
+  orderId       String
+  restaurantId  String
+  // Method: UPI | CARD | CASH | COUNTER | WALLET
+  method        String
+  // Status: PENDING | PROCESSING | PAID | FAILED | REFUNDED
+  status        String   @default("PENDING")
+  amount        Float
+  currency      String   @default("INR")
+  // Provider reference (for online payments)
+  provider      String?  // RAZORPAY | PHONEPE | PAYTM | STRIPE | CASH | COUNTER
+  providerTxnId String?
+  providerRef   String?
+  // Idempotency
+  idempotencyKey String? @unique
+  // Verification
+  verifiedAt    DateTime?
+  verifiedById  String?
+  failureReason String?
+
+  // Metadata
+  rawResponse   String?
+
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  verifiedBy    User?    @relation(fields: [verifiedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([restaurantId])
+  @@index([status])
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique  // SG-INV-000001
+  orderId       String
+  restaurantId  String
+  // Snapshot of restaurant details at billing time
+  restaurantName String
+  restaurantAddress String
+  restaurantGst  String?
+  restaurantPhone String
+  // Snapshot of order
+  tableNumber   String
+  orderNumber   String
+  // Totals
+  subtotal      Float
+  taxAmount     Float
+  serviceCharge Float
+  discountAmount Float
+  grandTotal    Float
+  // Payment
+  paymentMethod String?
+  paymentStatus String
+  // Customer
+  customerName  String?
+  customerPhone String?
+
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  issuedAt DateTime @default(now())
+  @@index([orderId])
+  @@index([restaurantId])
+}
+
+// ============================================================================
+// SERVICE REQUESTS (call waiter, request bill)
+// ============================================================================
+
+model ServiceRequest {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  tableId       String
+  orderId       String?
+  // Type: CALL_WAITER | REQUEST_BILL | WATER | CLEANUP | CUSTOM
+  type          String
+  status        String   @default("PENDING")  // PENDING | ACKNOWLEDGED | COMPLETED
+  notes         String?
+  handledById   String?
+
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  table         Table      @relation(fields: [tableId], references: [id])
+  order         Order?     @relation(fields: [orderId], references: [id])
+  handledBy     User?      @relation(fields: [handledById], references: [id])
+
+  createdAt DateTime @default(now())
+  resolvedAt DateTime?
+
+  @@index([restaurantId, status])
+  @@index([tableId])
+}
+
+// ============================================================================
+// NOTIFICATIONS & AUDIT
+// ============================================================================
+
+model Notification {
+  id            String   @id @default(cuid())
+  restaurantId  String
+  // Target audience: KITCHEN | WAITER | CUSTOMER | ADMIN
+  target        String
+  // Type: NEW_ORDER | ORDER_ACCEPTED | ORDER_PREPARING | ORDER_READY | ORDER_SERVED | PAYMENT_CONFIRMED | BILL_READY | SERVICE_REQUEST
+  type          String
+  title         String
+  message       String
+  // Related entities
+  orderId       String?
+  tableId       String?
+  // Delivery
+  read          Boolean  @default(false)
+  readAt        DateTime?
+
+  createdAt DateTime @default(now())
+  @@index([restaurantId, target, read])
+  @@index([createdAt])
+}
+
+model RestaurantSettings {
+  id            String   @id @default(cuid())
+  restaurantId  String   @unique
+  // Digital receipt config
+  receiptHeader String?
+  receiptFooter String?
+  showLogoOnReceipt Boolean @default(true)
+  // Notification preferences
+  notifyKitchenOnNewOrder   Boolean @default(true)
+  notifyWaiterOnBillRequest Boolean @default(true)
+  playSoundOnNewOrder       Boolean @default(true)
+  // Auto-accept orders
+  autoAcceptOrders          Boolean @default(false)
+  // Allow customer to call waiter
+  allowCallWaiter           Boolean @default(true)
+  // Allow customer to request bill
+  allowRequestBill          Boolean @default(true)
+  // Max items per order
+  maxItemsPerOrder          Int     @default(50)
+  // Tax inclusive pricing
+  taxInclusive              Boolean @default(false)
+
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  restaurantId  String?
+  userId        String?
+  action        String   // CREATE | UPDATE | DELETE | LOGIN | LOGOUT | STATUS_CHANGE
+  entity        String   // ORDER | MENU_ITEM | TABLE | USER | PAYMENT | etc.
+  entityId      String?
+  details       String?  // JSON string of changes
+  ipAddress     String?
+  userAgent     String?
+
+  restaurant    Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: SetNull)
+  user          User?       @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  @@index([restaurantId])
+  @@index([userId])
+  @@index([entity, entityId])
+}

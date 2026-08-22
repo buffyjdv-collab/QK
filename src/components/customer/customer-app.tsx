@@ -1,0 +1,221 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useCustomerMenu, api } from '@/hooks/api'
+import { useCustomerCart } from '@/stores/customer-cart'
+import { RestaurantHeader } from './restaurant-header'
+import { CategoryTabs } from './category-tabs'
+import { MenuList } from './menu-list'
+import { ItemDetailSheet } from './item-detail-sheet'
+import { CartDrawer } from './cart-drawer'
+import { OrderTracking } from './order-tracking'
+import { BillView } from './bill-view'
+import { FloatingCartButton } from './floating-cart-button'
+import { LoadingSpinner } from '@/components/restaurant/loading-states'
+import { Button } from '@/components/ui/button'
+import { ChefHat, Clock, Utensils } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { toast } from 'sonner'
+import type { MenuItemWithRelations } from './types'
+
+type View = 'menu' | 'cart' | 'checkout' | 'track' | 'bill'
+
+export function CustomerApp({ token }: { token: string }) {
+  const [view, setView] = useState<View>('menu')
+  const [activeCategoryId, setActiveCategoryId] = useState<string>('')
+  const [activeItemId, setActiveItemId] = useState<string | null>(null)
+  const [cartOpen, setCartOpen] = useState(false)
+  const [placedOrderId, setPlacedOrderId] = useState<string | null>(null)
+
+  // Restore placed order from sessionStorage (so customer refresh keeps tracking)
+  useEffect(() => {
+    const saved = sessionStorage.getItem(`order-${token}`)
+    if (saved) setPlacedOrderId(saved)
+  }, [token])
+
+  const { data, isLoading, error } = useCustomerMenu(token)
+  const setScope = useCustomerCart((s) => s.setScope)
+
+  useEffect(() => {
+    if (data?.restaurant.id && data?.table.id) {
+      setScope(data.restaurant.id, data.table.id)
+    }
+  }, [data?.restaurant.id, data?.table.id, setScope])
+
+  // Hash-based view routing
+  useEffect(() => {
+    const apply = () => {
+      const h = window.location.hash.replace('#', '')
+      if (['cart', 'checkout', 'track', 'bill'].includes(h)) {
+        setView(h as View)
+      } else {
+        setView('menu')
+      }
+    }
+    apply()
+    window.addEventListener('hashchange', apply)
+    return () => window.removeEventListener('hashchange', apply)
+  }, [])
+
+  // Sync placed order with hash routing
+  useEffect(() => {
+    if (placedOrderId && view === 'menu') {
+      window.location.hash = 'track'
+    }
+  }, [placedOrderId, view])
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-orange-50/30">
+        <div className="text-center">
+          <LoadingSpinner size="lg" className="text-orange-600" />
+          <p className="mt-3 text-sm text-muted-foreground">
+            Loading menu…
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-orange-50/30 p-6 text-center">
+        <div className="rounded-full bg-red-100 p-4">
+          <Utensils className="h-8 w-8 text-red-600" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold">QR code invalid</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {error.message || 'This QR code is not recognised.'}
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          Try again
+        </Button>
+      </div>
+    )
+  }
+
+  if (!data) return null
+
+  const { restaurant, table, categories, items } = data
+
+  if (!restaurant.isOpen) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-orange-50/30 p-6 text-center">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="max-w-md space-y-4"
+        >
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-amber-100">
+            <Clock className="h-10 w-10 text-amber-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">{restaurant.name} is currently closed</h1>
+            <p className="mt-1 text-muted-foreground">
+              We're sorry — we aren't taking orders right now. We're open
+              daily {restaurant.openingTime} – {restaurant.closingTime}.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-white p-4 text-left text-sm">
+            <p className="font-semibold">{restaurant.name}</p>
+            <p className="text-muted-foreground">{restaurant.address}</p>
+            <p className="text-muted-foreground">{restaurant.phone}</p>
+          </div>
+        </motion.div>
+      </div>
+    )
+  }
+
+  const activeItem: MenuItemWithRelations | undefined = activeItemId
+    ? items.find((i: any) => i.id === activeItemId)
+    : undefined
+
+  return (
+    <div
+      className="min-h-screen bg-white"
+      style={{
+        // Apply restaurant brand colours as CSS vars
+        ['--brand-primary' as any]: restaurant.primaryColor,
+        ['--brand-accent' as any]: restaurant.accentColor,
+      }}
+    >
+      <RestaurantHeader
+        restaurant={restaurant}
+        table={table}
+        onBackToMenu={() => {
+          setView('menu')
+          window.location.hash = ''
+        }}
+      />
+
+      {view === 'menu' && (
+        <>
+          <CategoryTabs
+            categories={categories}
+            activeId={activeCategoryId}
+            onChange={setActiveCategoryId}
+          />
+          <MenuList
+            categories={categories}
+            items={items}
+            onSelectItem={(id) => setActiveItemId(id)}
+          />
+        </>
+      )}
+
+      {view === 'track' && placedOrderId && (
+        <OrderTracking
+          orderId={placedOrderId}
+          onBackToMenu={() => {
+            setView('menu')
+            window.location.hash = ''
+          }}
+          onProceedToBill={() => {
+            setView('bill')
+            window.location.hash = 'bill'
+          }}
+        />
+      )}
+
+      {view === 'bill' && placedOrderId && (
+        <BillView
+          orderId={placedOrderId}
+          restaurant={restaurant}
+          onBackToMenu={() => {
+            sessionStorage.removeItem(`order-${token}`)
+            setPlacedOrderId(null)
+            setView('menu')
+            window.location.hash = ''
+          }}
+        />
+      )}
+
+      <ItemDetailSheet
+        item={activeItem || null}
+        open={!!activeItem}
+        onOpenChange={(o) => !o && setActiveItemId(null)}
+        currencySymbol={restaurant.currencySymbol}
+      />
+
+      <CartDrawer
+        open={cartOpen}
+        onOpenChange={setCartOpen}
+        restaurant={restaurant}
+        onCheckout={(orderId) => {
+          setPlacedOrderId(orderId)
+          sessionStorage.setItem(`order-${token}`, orderId)
+          setCartOpen(false)
+          window.location.hash = 'track'
+          toast.success('Order placed! Track its status below.')
+        }}
+      />
+
+      <FloatingCartButton onClick={() => setCartOpen(true)} />
+    </div>
+  )
+}
+
+// Re-export the api helper for child components needing direct mutation calls
+export { api }

@@ -1,0 +1,201 @@
+import { z } from 'zod'
+
+// Customer-side order placement
+export const createOrderItemSchema = z.object({
+  menuItemId: z.string().min(1),
+  variantId: z.string().optional().nullable(),
+  modifierIds: z.array(z.string()).optional().default([]),
+  quantity: z.number().int().min(1).max(50),
+  notes: z.string().max(280).optional(),
+})
+
+export const createOrderSchema = z.object({
+  tableToken: z.string().min(1),
+  items: z.array(createOrderItemSchema).min(1).max(50),
+  customerInfo: z
+    .object({
+      name: z.string().max(80).optional(),
+      phone: z.string().max(20).optional(),
+      email: z.string().email().optional().or(z.literal('')),
+    })
+    .optional(),
+  idempotencyKey: z.string().min(8).max(120),
+  notes: z.string().max(500).optional(),
+})
+
+// Service request
+export const createServiceRequestSchema = z.object({
+  tableToken: z.string().min(1),
+  orderId: z.string().optional(),
+  type: z.enum(['CALL_WAITER', 'REQUEST_BILL', 'WATER', 'CLEANUP', 'CUSTOM']),
+  notes: z.string().max(280).optional(),
+})
+
+// Payment initiation
+export const initiatePaymentSchema = z.object({
+  orderId: z.string().min(1),
+  method: z.enum(['UPI', 'CARD', 'WALLET']),
+})
+
+export const verifyPaymentSchema = z.object({
+  paymentId: z.string().min(1),
+  providerTxnId: z.string().min(1),
+})
+
+// Admin: order status update
+export const updateOrderStatusSchema = z.object({
+  status: z.enum([
+    'NEW',
+    'ACCEPTED',
+    'PREPARING',
+    'READY',
+    'SERVED',
+    'COMPLETED',
+    'CANCELLED',
+  ]),
+  cancelReason: z.string().max(280).optional(),
+})
+
+// Admin: menu category
+export const menuCategorySchema = z.object({
+  name: z.string().min(1).max(60),
+  description: z.string().max(280).optional(),
+  icon: z.string().max(20).optional(),
+  sortOrder: z.number().int().min(0).optional(),
+  active: z.boolean().optional(),
+})
+
+// Admin: menu variant
+export const menuVariantSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1).max(40),
+  priceModifier: z.number().min(-10000).max(10000),
+  isDefault: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).optional(),
+})
+
+// Admin: modifier
+export const modifierSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1).max(40),
+  price: z.number().min(0).max(10000),
+  isDefault: z.boolean().optional(),
+  active: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).optional(),
+})
+
+// Admin: modifier group
+export const modifierGroupSchema = z.object({
+  name: z.string().min(1).max(60),
+  description: z.string().max(280).optional(),
+  selectionType: z.enum(['SINGLE', 'MULTIPLE']),
+  required: z.boolean().optional(),
+  minSelection: z.number().int().min(0).max(20).optional(),
+  maxSelection: z.number().int().min(1).max(50).optional(),
+  sortOrder: z.number().int().min(0).optional(),
+  menuItemId: z.string().optional().nullable(),
+  modifiers: z.array(modifierSchema).optional(),
+})
+
+// Admin: menu item
+export const menuItemSchema = z.object({
+  name: z.string().min(1).max(120),
+  description: z.string().max(600).optional(),
+  image: z.string().url().optional().or(z.literal('')),
+  categoryId: z.string().min(1),
+  isVeg: z.boolean().optional(),
+  isSpicy: z.boolean().optional(),
+  basePrice: z.number().min(0).max(100000),
+  taxRate: z.number().min(0).max(1).optional(),
+  available: z.boolean().optional(),
+  soldOut: z.boolean().optional(),
+  isFeatured: z.boolean().optional(),
+  isPopular: z.boolean().optional(),
+  prepTime: z.number().int().min(0).max(600).optional(),
+  tags: z.string().max(280).optional(),
+  sortOrder: z.number().int().min(0).optional(),
+  variants: z.array(menuVariantSchema).optional(),
+  modifierGroupIds: z.array(z.string()).optional(),
+})
+
+// Admin: table
+export const tableSchema = z.object({
+  number: z.string().min(1).max(20),
+  label: z.string().max(60).optional().nullable(),
+  capacity: z.number().int().min(1).max(50),
+  active: z.boolean().optional(),
+  branchId: z.string().optional().nullable(),
+})
+
+// Admin: staff
+export const staffCreateSchema = z.object({
+  name: z.string().min(1).max(120),
+  email: z.string().email(),
+  password: z.string().min(6).max(120),
+  role: z.enum([
+    'RESTAURANT_OWNER',
+    'MANAGER',
+    'KITCHEN_STAFF',
+    'WAITER',
+    'CASHIER',
+  ]),
+  branchId: z.string().optional().nullable(),
+  phone: z.string().max(20).optional(),
+})
+
+export const staffUpdateSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  role: z
+    .enum([
+      'RESTAURANT_OWNER',
+      'MANAGER',
+      'KITCHEN_STAFF',
+      'WAITER',
+      'CASHIER',
+    ])
+    .optional(),
+  active: z.boolean().optional(),
+  branchId: z.string().optional().nullable(),
+  phone: z.string().max(20).optional(),
+  password: z.string().min(6).max(120).optional(),
+})
+
+// Admin: settings
+export const settingsSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  tagline: z.string().max(120).optional(),
+  description: z.string().max(1000).optional(),
+  address: z.string().max(280).optional(),
+  phone: z.string().max(20).optional(),
+  email: z.string().email().optional().or(z.literal('')),
+  website: z.string().max(120).optional(),
+  logo: z.string().url().optional().or(z.literal('')),
+  gstNumber: z.string().max(30).optional(),
+  panNumber: z.string().max(20).optional(),
+  taxRate: z.number().min(0).max(1).optional(),
+  serviceChargeRate: z.number().min(0).max(1).optional(),
+  openingTime: z.string().max(10).optional(),
+  closingTime: z.string().max(10).optional(),
+  isOpen: z.boolean().optional(),
+  acceptUpi: z.boolean().optional(),
+  acceptCard: z.boolean().optional(),
+  acceptCash: z.boolean().optional(),
+  acceptCounter: z.boolean().optional(),
+  primaryColor: z.string().max(20).optional(),
+  accentColor: z.string().max(20).optional(),
+  settings: z
+    .object({
+      receiptHeader: z.string().max(280).optional(),
+      receiptFooter: z.string().max(280).optional(),
+      showLogoOnReceipt: z.boolean().optional(),
+      notifyKitchenOnNewOrder: z.boolean().optional(),
+      notifyWaiterOnBillRequest: z.boolean().optional(),
+      playSoundOnNewOrder: z.boolean().optional(),
+      autoAcceptOrders: z.boolean().optional(),
+      allowCallWaiter: z.boolean().optional(),
+      allowRequestBill: z.boolean().optional(),
+      maxItemsPerOrder: z.number().int().min(1).max(200).optional(),
+      taxInclusive: z.boolean().optional(),
+    })
+    .optional(),
+})

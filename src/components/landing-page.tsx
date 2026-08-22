@@ -1,0 +1,324 @@
+'use client'
+
+import { useState } from 'react'
+import { signIn } from 'next-auth/react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { QrCode, UtensilsCrossed, Zap, BarChart3, BellRing, Loader2 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { toast } from 'sonner'
+import { Separator } from '@/components/ui/separator'
+
+const DEMO_CREDS = [
+  { role: 'Owner', email: 'owner@spicegarden.in' },
+  { role: 'Manager', email: 'manager@spicegarden.in' },
+  { role: 'Chef', email: 'chef1@spicegarden.in' },
+  { role: 'Waiter', email: 'waiter1@spicegarden.in' },
+  { role: 'Cashier', email: 'cashier@spicegarden.in' },
+  { role: 'Super Admin', email: 'admin@platform.com' },
+]
+
+export function LandingPage() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const res = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+      })
+      if (res?.error) {
+        toast.error('Invalid email or password')
+      } else {
+        toast.success('Signed in — welcome back!')
+        // Force a refresh so server component re-reads session
+        setTimeout(() => window.location.reload(), 200)
+      }
+    } catch (err) {
+      toast.error('Sign-in failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const quickLogin = (cred: { email: string; role: string }) => {
+    setEmail(cred.email)
+    setPassword('password123')
+    toast.info(`Loaded ${cred.role} demo credentials`)
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-orange-50 via-white to-white">
+      {/* Nav */}
+      <nav className="border-b bg-white/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-600 text-white">
+              <UtensilsCrossed className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold leading-tight">QR Dine</p>
+              <p className="text-[10px] text-muted-foreground">Restaurant OS</p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => {
+              const el = document.getElementById('login')
+              el?.scrollIntoView({ behavior: 'smooth' })
+            }}
+          >
+            Sign in
+          </Button>
+        </div>
+      </nav>
+
+      <main className="mx-auto max-w-6xl px-4">
+        {/* Hero */}
+        <section className="grid gap-8 py-10 lg:grid-cols-2 lg:py-16">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex flex-col justify-center"
+          >
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-700">
+              <Zap className="h-3 w-3" /> Scan-to-order SaaS for modern restaurants
+            </span>
+            <h1 className="mt-4 text-4xl font-extrabold leading-tight tracking-tight text-slate-900 sm:text-5xl">
+              Turn every table into a{' '}
+              <span className="text-orange-600">contactless</span> ordering point
+            </h1>
+            <p className="mt-4 text-base text-muted-foreground">
+              Customers scan a QR, browse your menu, customise their dishes,
+              and place orders that flow straight into your kitchen — with
+              real-time tracking, integrated billing, and live reports.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Button
+                size="lg"
+                className="bg-orange-600 text-white hover:bg-orange-700"
+                onClick={() => {
+                  window.location.href = '/?table=sg-5-1tgesbnhbx'
+                }}
+              >
+                <QrCode className="mr-2 h-5 w-5" />
+                Scan demo menu
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => {
+                  const el = document.getElementById('login')
+                  el?.scrollIntoView({ behavior: 'smooth' })
+                }}
+              >
+                Staff sign in
+              </Button>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-6 text-xs text-muted-foreground">
+              <Stat label="Avg order time saved" value="12 min" />
+              <Stat label="Restaurants onboarded" value="340+" />
+              <Stat label="Orders processed" value="2.4M+" />
+            </div>
+          </motion.div>
+
+          {/* Right: phone mockup */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.1 }}
+            className="flex justify-center lg:justify-end"
+          >
+            <div className="relative w-[280px]">
+              <div className="aspect-[9/19] rounded-[2rem] border-8 border-slate-900 bg-white shadow-2xl">
+                <div className="flex h-full flex-col">
+                  <div className="h-6 rounded-t-[1.4rem] bg-slate-900" />
+                  <div className="h-1 bg-orange-600" />
+                  <div className="flex-1 space-y-2 p-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-600 text-white">
+                        <UtensilsCrossed className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold">Spice Garden</p>
+                        <p className="text-[9px] text-muted-foreground">Table T5 · Bengaluru</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[9px] text-orange-700">Starters</span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px]">Biryani</span>
+                    </div>
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="flex items-center gap-2 rounded-lg border border-slate-100 p-1.5">
+                        <div className="h-10 w-10 rounded-md bg-orange-100" />
+                        <div className="flex-1">
+                          <p className="text-[10px] font-semibold">Chicken Biryani</p>
+                          <p className="text-[8px] text-muted-foreground">Aromatic basmati rice…</p>
+                          <p className="text-[10px] font-bold text-orange-600">₹280</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="m-2 flex items-center justify-between rounded-full bg-orange-600 px-3 py-2 text-white">
+                    <span className="text-[10px] font-semibold">View cart · 2</span>
+                    <span className="text-[10px] font-bold">₹450</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </section>
+
+        {/* Feature strip */}
+        <section className="grid gap-3 py-8 sm:grid-cols-2 lg:grid-cols-4">
+          <Feature
+            icon={Zap}
+            title="Scan-to-order"
+            desc="QR codes per table — customers order without an app or signup."
+          />
+          <Feature
+            icon={BellRing}
+            title="Real-time kitchen"
+            desc="Orders land instantly in the KDS; status updates flow back to customers."
+          />
+          <Feature
+            icon={BarChart3}
+            title="Live reports"
+            desc="Sales by hour, best-sellers, tax collected, payment breakdowns."
+          />
+          <Feature
+            icon={QrCode}
+            title="QR & table ops"
+            desc="Generate, regenerate and print QR codes; manage tables & sections."
+          />
+        </section>
+
+        <Separator className="my-6" />
+
+        {/* Login */}
+        <section id="login" className="grid gap-6 py-10 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle>Sign in to your dashboard</CardTitle>
+              <CardDescription>
+                Use your staff credentials to access the restaurant operations dashboard.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleLogin} className="space-y-3">
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@restaurant.com"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full bg-orange-600 text-white hover:bg-orange-700"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Signing in…
+                    </>
+                  ) : (
+                    'Sign in'
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-orange-50/50">
+            <CardHeader>
+              <CardTitle className="text-base">Demo accounts</CardTitle>
+              <CardDescription>
+                All demo accounts use the password{' '}
+                <code className="rounded bg-white px-1 py-0.5 text-xs">
+                  password123
+                </code>
+                . Tap a role to autofill.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-2 sm:grid-cols-2">
+              {DEMO_CREDS.map((c) => (
+                <button
+                  key={c.email}
+                  onClick={() => quickLogin(c)}
+                  className="flex items-center justify-between rounded-lg border border-orange-200 bg-white px-3 py-2 text-left text-sm transition-colors hover:bg-orange-50"
+                >
+                  <div>
+                    <p className="font-semibold">{c.role}</p>
+                    <p className="text-xs text-muted-foreground">{c.email}</p>
+                  </div>
+                  <span className="text-xs text-orange-600">Use →</span>
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+        </section>
+
+        <footer className="border-t py-6 text-center text-xs text-muted-foreground">
+          <p>
+            QR Dine · Restaurant operations platform ·
+            <a href="/?table=sg-5-1tgesbnhbx" className="ml-1 text-orange-600">
+              Try the customer scan demo
+            </a>
+          </p>
+        </footer>
+      </main>
+    </div>
+  )
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-lg font-bold text-slate-900">{value}</p>
+      <p>{label}</p>
+    </div>
+  )
+}
+
+function Feature({
+  icon: Icon,
+  title,
+  desc,
+}: {
+  icon: any
+  title: string
+  desc: string
+}) {
+  return (
+    <div className="rounded-xl border border-orange-100 bg-white p-4">
+      <div className="mb-2 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+        <Icon className="h-5 w-5" />
+      </div>
+      <p className="font-semibold">{title}</p>
+      <p className="mt-1 text-sm text-muted-foreground">{desc}</p>
+    </div>
+  )
+}
