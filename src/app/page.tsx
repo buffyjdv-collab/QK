@@ -17,7 +17,16 @@ export default async function Home({ searchParams }: HomePageProps) {
     return <CustomerApp token={tableToken} />
   }
 
-  const session = await getServerSession(authOptions)
+  // Wrap in try/catch — a stale/invalid JWT cookie should never crash the page.
+  // If session decoding fails, we simply show the landing page (user signs in again).
+  let session: Awaited<ReturnType<typeof getServerSession>> = null
+  try {
+    session = await getServerSession(authOptions)
+  } catch (err) {
+    console.warn('[page] getServerSession failed (likely stale JWT cookie):', err instanceof Error ? err.message : err)
+    session = null
+  }
+
   if (!session?.user) {
     return <LandingPage />
   }

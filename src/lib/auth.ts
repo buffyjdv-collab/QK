@@ -121,5 +121,15 @@ export const authOptions: NextAuthOptions = {
       return session
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.NEXTAUTH_SECRET || 'spice-garden-quick-order-secret-key-2026-very-long-and-stable-do-not-change',
+  // Gracefully handle stale JWT cookies — don't crash the page, just treat as no session
+  logger: {
+    error(code: string, message: any) {
+      if (code === 'JWT_SESSION_ERROR') {
+        console.warn('[next-auth] Stale JWT cookie — user will be asked to sign in again.')
+        return
+      }
+      console.error(`[next-auth][${code}]`, message)
+    },
+  },
 }
