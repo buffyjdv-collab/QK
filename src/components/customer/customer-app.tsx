@@ -11,6 +11,7 @@ import { CartDrawer } from './cart-drawer'
 import { OrderTracking } from './order-tracking'
 import { BillView } from './bill-view'
 import { FloatingCartButton } from './floating-cart-button'
+import { MobileBottomNav } from './mobile-bottom-nav'
 import { LoadingSpinner } from '@/components/restaurant/loading-states'
 import { Button } from '@/components/ui/button'
 import { ChefHat, Clock, Utensils } from 'lucide-react'
@@ -134,7 +135,7 @@ export function CustomerApp({ token }: { token: string }) {
 
   return (
     <div
-      className="min-h-screen bg-white"
+      className="min-h-screen bg-white pb-20 md:pb-0"
       style={{
         // Apply restaurant brand colours as CSS vars
         ['--brand-primary' as any]: restaurant.primaryColor,
@@ -213,6 +214,13 @@ export function CustomerApp({ token }: { token: string }) {
       />
 
       <FloatingCartButton onClick={() => setCartOpen(true)} />
+
+      <MobileBottomNav
+        currentView={view}
+        onViewChange={setView}
+        placedOrderId={placedOrderId}
+        onOpenCart={() => setCartOpen(true)}
+      />
     </div>
   )
 }
