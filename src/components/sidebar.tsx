@@ -20,10 +20,21 @@ import {
   Shield,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
+  UserCheck,
+  Key,
+  Database,
+  Bell,
+  Palette,
+  Lock,
+  Monitor,
+  Plug,
+  FileText,
+  Layers,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { signOut } from 'next-auth/react'
-import { hasPermission, PERMISSIONS, ROLE_LABELS } from '@/lib/auth'
+import { hasPermission, PERMISSIONS, ROLE_LABELS, ROLE_HIERARCHY } from '@/lib/auth'
 import type { Role } from '@/lib/types'
 import { useState } from 'react'
 
@@ -60,6 +71,131 @@ const NAV: NavItem[] = [
   { key: 'settings', label: 'Settings', icon: Settings, permission: 'settings.manage', group: 'restaurant' },
 ]
 
+// Role configuration for display
+const ROLES_CONFIG = [
+  { 
+    role: 'SUPER_ADMIN' as Role, 
+    label: 'Super Admin', 
+    description: 'Full platform access',
+    icon: '🛡️',
+    color: 'text-purple-700',
+    bgColor: 'bg-purple-100',
+    borderColor: 'border-purple-300'
+  },
+  { 
+    role: 'RESTAURANT_OWNER' as Role, 
+    label: 'Restaurant Owner', 
+    description: 'Restaurant management',
+    icon: '👑',
+    color: 'text-blue-700',
+    bgColor: 'bg-blue-100',
+    borderColor: 'border-blue-300'
+  },
+  { 
+    role: 'MANAGER' as Role, 
+    label: 'Manager', 
+    description: 'Daily operations',
+    icon: '📋',
+    color: 'text-green-700',
+    bgColor: 'bg-green-100',
+    borderColor: 'border-green-300'
+  },
+  { 
+    role: 'KITCHEN_STAFF' as Role, 
+    label: 'Kitchen Staff', 
+    description: 'Food preparation',
+    icon: '👨‍🍳',
+    color: 'text-orange-700',
+    bgColor: 'bg-orange-100',
+    borderColor: 'border-orange-300'
+  },
+  { 
+    role: 'WAITER' as Role, 
+    label: 'Waiter', 
+    description: 'Table service',
+    icon: '🎯',
+    color: 'text-cyan-700',
+    bgColor: 'bg-cyan-100',
+    borderColor: 'border-cyan-300'
+  },
+  { 
+    role: 'CASHIER' as Role, 
+    label: 'Cashier', 
+    description: 'Payments & billing',
+    icon: '💰',
+    color: 'text-pink-700',
+    bgColor: 'bg-pink-100',
+    borderColor: 'border-pink-300'
+  },
+]
+
+// Configuration sections for super admin
+const CONFIG_SECTIONS = [
+  {
+    key: 'general',
+    label: 'General',
+    icon: Settings,
+    items: [
+      { key: 'platform-name', label: 'Platform Name', icon: Globe2 },
+      { key: 'default-currency', label: 'Currency', icon: CreditCard },
+      { key: 'timezone', label: 'Timezone', icon: Monitor },
+      { key: 'language', label: 'Language', icon: FileText },
+    ]
+  },
+  {
+    key: 'security',
+    label: 'Security',
+    icon: Lock,
+    items: [
+      { key: 'auth-settings', label: 'Authentication', icon: Key },
+      { key: 'session-timeout', label: 'Session Timeout', icon: Shield },
+      { key: 'api-keys', label: 'API Keys', icon: Key },
+      { key: 'audit-log', label: 'Audit Log', icon: FileText },
+    ]
+  },
+  {
+    key: 'notifications',
+    label: 'Notifications',
+    icon: Bell,
+    items: [
+      { key: 'email-settings', label: 'Email Settings', icon: Bell },
+      { key: 'sms-settings', label: 'SMS Settings', icon: BellRing },
+      { key: 'push-settings', label: 'Push Notifications', icon: Bell },
+    ]
+  },
+  {
+    key: 'integrations',
+    label: 'Integrations',
+    icon: Plug,
+    items: [
+      { key: 'payment-gateways', label: 'Payment Gateways', icon: CreditCard },
+      { key: 'email-provider', label: 'Email Provider', icon: Plug },
+      { key: 'sms-provider', label: 'SMS Provider', icon: Plug },
+      { key: 'webhooks', label: 'Webhooks', icon: Plug },
+    ]
+  },
+  {
+    key: 'appearance',
+    label: 'Appearance',
+    icon: Palette,
+    items: [
+      { key: 'theme', label: 'Theme', icon: Palette },
+      { key: 'logo-upload', label: 'Logo & Branding', icon: Globe2 },
+      { key: 'custom-css', label: 'Custom CSS', icon: Palette },
+    ]
+  },
+  {
+    key: 'data',
+    label: 'Data & Storage',
+    icon: Database,
+    items: [
+      { key: 'backup', label: 'Backup & Restore', icon: Database },
+      { key: 'export-data', label: 'Export Data', icon: FileText },
+      { key: 'storage', label: 'Storage Management', icon: Database },
+    ]
+  },
+]
+
 export function Sidebar({
   role,
   activeKey,
@@ -73,6 +209,10 @@ export function Sidebar({
   userName?: string | null
   onNavigate?: (key: string) => void
 }) {
+  const [showRolesPanel, setShowRolesPanel] = useState(false)
+  const [showConfigPanel, setShowConfigPanel] = useState(false)
+  const [expandedConfigSection, setExpandedConfigSection] = useState<string | null>(null)
+
   // Handle undefined/null role gracefully - show all items if no role (loading state)
   // or filter by permission if role exists
   const visible = NAV.filter(
@@ -83,10 +223,11 @@ export function Sidebar({
   console.log('[Sidebar] Role:', role, 'Visible items:', visible.length)
   const platformItems = visible.filter((n) => n.group === 'platform')
   const restaurantItems = visible.filter((n) => n.group === 'restaurant')
-  const isPlatformView = activeKey.startsWith('platform-')
+  const isPlatformView = activeKey.startsWith('platform-') || activeKey.startsWith('roles-') || activeKey.startsWith('config-')
 
   return (
-    <aside className="flex h-full w-[240px] flex-col border-r border-slate-200 bg-white">
+    <aside className="flex h-full w-[280px] flex-col border-r border-slate-200 bg-white">
+      {/* Header */}
       <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-600 text-white">
           <QrCode className="h-5 w-5" />
@@ -106,7 +247,7 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
-        {/* Platform section */}
+        {/* Platform section - Super Admin only */}
         {platformItems.length > 0 && (
           <>
             <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -115,19 +256,135 @@ export function Sidebar({
             {platformItems.map((item) => (
               <NavButton key={item.key} item={item} activeKey={activeKey} onNavigate={onNavigate} />
             ))}
-            <div className="my-2 border-t border-slate-100" />
-            <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              {role === 'SUPER_ADMIN' ? 'Tenant view' : 'Restaurant'}
+            
+            {/* Super Admin: Roles & Access Section */}
+            {role === 'SUPER_ADMIN' && (
+              <>
+                <div className="my-2 border-t border-slate-100" />
+                <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Access Control
+                </p>
+                
+                {/* Roles Management Button */}
+                <button
+                  onClick={() => setShowRolesPanel(!showRolesPanel)}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                    showRolesPanel 
+                      ? 'bg-purple-50 text-purple-700' 
+                      : 'text-slate-600 hover:bg-slate-100'
+                  )}
+                >
+                  <Shield className={cn('h-4 w-4', showRolesPanel ? 'text-purple-600' : 'text-slate-500')} />
+                  <span className="flex-1 text-left">Roles & Permissions</span>
+                  <span className="rounded-full bg-purple-100 px-1.5 py-0.5 text-[9px] font-bold text-purple-700">
+                    {ROLES_CONFIG.length}
+                  </span>
+                  {showRolesPanel ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </button>
+
+                {/* Roles Panel - Expandable */}
+                {showRolesPanel && (
+                  <div className="ml-4 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                    {ROLES_CONFIG.map((roleConfig) => (
+                      <RoleCard 
+                        key={roleConfig.role} 
+                        config={roleConfig}
+                        isActive={activeKey === `roles-${roleConfig.role.toLowerCase()}`}
+                        onClick={() => onNavigate?.(`roles-${roleConfig.role.toLowerCase()}`)}
+                      />
+                    ))}
+                    
+                    {/* Permission Matrix Link */}
+                    <button
+                      onClick={() => onNavigate?.('roles-matrix')}
+                      className="mt-2 flex w-full items-center gap-2 rounded-md border border-dashed border-slate-300 px-2 py-1.5 text-xs text-slate-500 hover:border-purple-300 hover:text-purple-600 hover:bg-purple-50"
+                    >
+                      <Layers className="h-3.5 w-3.5" />
+                      View Full Permission Matrix
+                      <ChevronRight className="ml-auto h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* System Configuration Button */}
+                <button
+                  onClick={() => setShowConfigPanel(!showConfigPanel)}
+                  className={cn(
+                    'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors mt-1',
+                    showConfigPanel 
+                      ? 'bg-emerald-50 text-emerald-700' 
+                      : 'text-slate-600 hover:bg-slate-100'
+                  )}
+                >
+                  <Settings className={cn('h-4 w-4', showConfigPanel ? 'text-emerald-600' : 'text-slate-500')} />
+                  <span className="flex-1 text-left">System Configuration</span>
+                  <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">
+                    {CONFIG_SECTIONS.length}
+                  </span>
+                  {showConfigPanel ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </button>
+
+                {/* Config Panel - Expandable with Sections */}
+                {showConfigPanel && (
+                  <div className="ml-4 space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                    {CONFIG_SECTIONS.map((section) => (
+                      <ConfigSection 
+                        key={section.key}
+                        section={section}
+                        isExpanded={expandedConfigSection === section.key}
+                        onToggle={() => setExpandedConfigSection(
+                          expandedConfigSection === section.key ? null : section.key
+                        )}
+                        activeKey={activeKey}
+                        onNavigate={onNavigate}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <div className="my-2 border-t border-slate-100" />
+                <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Tenant View
+                </p>
+              </>
+            )}
+
+            {!role?.startsWith('SUPER_ADMIN') && platformItems.length > 0 && (
+              <>
+                <div className="my-2 border-t border-slate-100" />
+                <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Restaurant
+                </p>
+              </>
+            )}
+          </>
+        )}
+
+        {/* Restaurant section - Show if no platform items or not in platform view */}
+        {(platformItems.length === 0 || !role?.startsWith('SUPER_ADMIN')) && (
+          <>
+            <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Restaurant
             </p>
           </>
         )}
 
-        {/* Restaurant section */}
+        {/* Restaurant section items */}
         {restaurantItems.map((item) => (
           <NavButton key={item.key} item={item} activeKey={activeKey} onNavigate={onNavigate} />
         ))}
       </nav>
 
+      {/* Footer - User Info */}
       <div className="border-t border-slate-200 p-2">
         <div className="mb-2 rounded-lg bg-slate-50 px-3 py-2">
           <p className="text-xs font-semibold text-slate-900">{userName || 'Signed in'}</p>
@@ -136,6 +393,11 @@ export function Sidebar({
           </div>
           {/* Permissions Summary */}
           {role && <PermissionsList role={role} />}
+          
+          {/* Super Admin Quick Stats */}
+          {role === 'SUPER_ADMIN' && (
+            <SuperAdminStats />
+          )}
         </div>
         <Button
           variant="ghost"
@@ -148,6 +410,138 @@ export function Sidebar({
         </Button>
       </div>
     </aside>
+  )
+}
+
+// Role Card Component for Roles Panel
+function RoleCard({ 
+  config, 
+  isActive, 
+  onClick 
+}: { 
+  config: typeof ROLES_CONFIG[0]
+  isActive: boolean
+  onClick: () => void 
+}) {
+  // Count permissions for this role
+  const permissionCount = Object.values(PERMISSIONS)
+    .filter(roles => roles.includes(config.role))
+    .length
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors',
+        isActive 
+          ? `${config.bgColor} ${config.color} border ${config.borderColor}` 
+          : 'hover:bg-white'
+      )}
+    >
+      <span className="text-sm">{config.icon}</span>
+      <div className="flex-1 min-w-0">
+        <p className={cn('text-xs font-medium truncate', isActive ? config.color : 'text-slate-700')}>
+          {config.label}
+        </p>
+        <p className="text-[9px] text-slate-500 truncate">{config.description}</p>
+      </div>
+      <span className={cn(
+        'rounded-full px-1.5 py-0.5 text-[9px] font-medium',
+        isActive ? `${config.bgColor} ${config.color}` : 'bg-slate-200 text-slate-600'
+      )}>
+        {permissionCount}
+      </span>
+    </button>
+  )
+}
+
+// Config Section Component
+function ConfigSection({ 
+  section, 
+  isExpanded, 
+  onToggle,
+  activeKey,
+  onNavigate 
+}: { 
+  section: typeof CONFIG_SECTIONS[0]
+  isExpanded: boolean
+  onToggle: () => void
+  activeKey: string
+  onNavigate?: (key: string) => void 
+}) {
+  const Icon = section.icon
+  
+  return (
+    <div className="overflow-hidden rounded-md border border-slate-200 bg-white">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center gap-2 px-2 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+      >
+        <Icon className="h-3.5 w-3.5 text-slate-500" />
+        <span className="flex-1 text-left">{section.label}</span>
+        <span className="rounded-full bg-slate-100 px-1 py-0.5 text-[9px] text-slate-500">
+          {section.items.length}
+        </span>
+        {isExpanded ? (
+          <ChevronUp className="h-3 w-3 text-slate-400" />
+        ) : (
+          <ChevronDown className="h-3 w-3 text-slate-400" />
+        )}
+      </button>
+      
+      {isExpanded && (
+        <div className="border-t border-slate-100 p-1">
+          {section.items.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => onNavigate?.(`config-${item.key}`)}
+              className={cn(
+                'flex w-full items-center gap-2 rounded px-2 py-1 text-[11px] transition-colors',
+                activeKey === `config-${item.key}`
+                  ? 'bg-emerald-50 text-emerald-700'
+                  : 'text-slate-600 hover:bg-slate-50'
+              )}
+            >
+              <item.icon className="h-3 w-3" />
+              <span className="flex-1 text-left">{item.label}</span>
+              <ChevronRight className="h-3 w-3 opacity-40" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Super Admin Quick Stats Component
+function SuperAdminStats() {
+  return (
+    <div className="mt-2 border-t border-slate-200 pt-2">
+      <p className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold text-slate-600">
+        <Shield className="h-3 w-3" />
+        Platform Overview
+      </p>
+      <div className="grid grid-cols-2 gap-1">
+        <div className="rounded bg-white px-1.5 py-1">
+          <p className="text-[9px] text-slate-500">Total Roles</p>
+          <p className="text-xs font-bold text-slate-800">{ROLES_CONFIG.length}</p>
+        </div>
+        <div className="rounded bg-white px-1.5 py-1">
+          <p className="text-[9px] text-slate-500">Permissions</p>
+          <p className="text-xs font-bold text-slate-800">{Object.keys(PERMISSIONS).length}</p>
+        </div>
+        <div className="rounded bg-white px-1.5 py-1">
+          <p className="text-[9px] text-slate-500">Config Sections</p>
+          <p className="text-xs font-bold text-slate-800">{CONFIG_SECTIONS.length}</p>
+        </div>
+        <div className="rounded bg-white px-1.5 py-1">
+          <p className="text-[9px] text-slate-500">Config Items</p>
+          <p className="text-xs font-bold text-slate-800">
+            {CONFIG_SECTIONS.reduce((acc, s) => acc + s.items.length, 0)}
+          </p>
+        </div>
+      </div>
+    </div>
   )
 }
 
