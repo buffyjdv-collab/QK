@@ -35,12 +35,12 @@ import { Button } from '@/components/ui/button'
 import { signOut } from 'next-auth/react'
 import { hasPermission, PERMISSIONS, ROLE_LABELS } from '@/lib/permissions'
 import type { Role } from '@/lib/types'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 
 interface NavItem {
   key: string
   label: string
-  icon: any
+  icon: React.ComponentType<{ className?: string }>
   permission?: string
   roles?: Role[]
   /** 'platform' group is super-admin-only and shown above restaurant nav. */
@@ -212,17 +212,15 @@ export function Sidebar({
   const [showConfigPanel, setShowConfigPanel] = useState(false)
   const [expandedConfigSection, setExpandedConfigSection] = useState<string | null>(null)
 
-  // Handle undefined/null role gracefully - show all items if no role (loading state)
-  // or filter by permission if role exists
-  const visible = NAV.filter(
-    (n) => !n.permission || !role || hasPermission(role, n.permission),
-  )
-  
-  // Debug: log role and visible items count
-  console.log('[Sidebar] Role:', role, 'Visible items:', visible.length)
-  const platformItems = visible.filter((n) => n.group === 'platform')
-  const restaurantItems = visible.filter((n) => n.group === 'restaurant')
-  const isPlatformView = activeKey.startsWith('platform-') || activeKey.startsWith('roles-') || activeKey.startsWith('config-')
+  // Memoize filtered navigation to prevent recalculation on every render
+  const visibleNavItems = useMemo(() => {
+    if (!role) return NAV // Show all during loading state
+    return NAV.filter((n) => !n.permission || hasPermission(role, n.permission))
+  }, [role])
+
+  const platformItems = visibleNavItems.filter((n) => n.group === 'platform')
+  const restaurantItems = visibleNavItems.filter((n) => n.group === 'restaurant')
+  const isSuperAdmin = role === 'SUPER_ADMIN'
 
   return (
     <aside className="flex h-full w-[280px] flex-col border-r border-slate-200 bg-white">
@@ -233,12 +231,12 @@ export function Sidebar({
         </div>
         <div className="min-w-0">
           <p className="truncate text-sm font-bold leading-tight">
-            {role === 'SUPER_ADMIN' && isPlatformView
+            {isSuperAdmin && activeKey.startsWith('platform-')
               ? 'QR Dine Platform'
               : restaurantName || 'QR Dine'}
           </p>
           <p className="text-[10px] text-muted-foreground">
-            {role === 'SUPER_ADMIN' && isPlatformView
+            {isSuperAdmin && activeKey.startsWith('platform-')
               ? 'Super Admin Console'
               : 'Restaurant OS'}
           </p>
@@ -257,7 +255,7 @@ export function Sidebar({
             ))}
             
             {/* Super Admin: Roles & Access Section */}
-            {role === 'SUPER_ADMIN' && (
+            {isSuperAdmin && (
               <>
                 <div className="my-2 border-t border-slate-100" />
                 <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -357,7 +355,7 @@ export function Sidebar({
               </>
             )}
 
-            {!role?.startsWith('SUPER_ADMIN') && platformItems.length > 0 && (
+            {!isSuperAdmin && platformItems.length > 0 && (
               <>
                 <div className="my-2 border-t border-slate-100" />
                 <p className="px-3 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -369,7 +367,7 @@ export function Sidebar({
         )}
 
         {/* Restaurant section - Show if no platform items or not in platform view */}
-        {(platformItems.length === 0 || !role?.startsWith('SUPER_ADMIN')) && (
+        {(platformItems.length === 0 || !isSuperAdmin) && (
           <>
             <p className="px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Restaurant
@@ -394,7 +392,7 @@ export function Sidebar({
           {role && <PermissionsList role={role} />}
           
           {/* Super Admin Quick Stats */}
-          {role === 'SUPER_ADMIN' && (
+          {isSuperAdmin && (
             <SuperAdminStats />
           )}
         </div>
@@ -593,7 +591,6 @@ function PermissionsList({ role }: { role: string }) {
     { category: 'Service', permissions: userPermissions.filter(p => p.startsWith('waiter.')) },
     { category: 'Billing', permissions: userPermissions.filter(p => p.startsWith('billing.') || p.startsWith('payments.')) },
     { category: 'Reports', permissions: userPermissions.filter(p => p.startsWith('reports.')) },
-    { category: 'Staff', permissions: userPermissions.filter(p => p.startsWith('staff.')) },
     { category: 'Staff', permissions: userPermissions.filter(p => p.startsWith('staff.')) },
     { category: 'Settings', permissions: userPermissions.filter(p => p.startsWith('settings.')) },
     { category: 'Platform', permissions: userPermissions.filter(p => p.startsWith('restaurants.')) },
