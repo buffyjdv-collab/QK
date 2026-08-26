@@ -594,6 +594,7 @@ function PermissionsList({ role }: { role: string }) {
     { category: 'Billing', permissions: userPermissions.filter(p => p.startsWith('billing.') || p.startsWith('payments.')) },
     { category: 'Reports', permissions: userPermissions.filter(p => p.startsWith('reports.')) },
     { category: 'Staff', permissions: userPermissions.filter(p => p.startsWith('staff.')) },
+    { category: 'Staff', permissions: userPermissions.filter(p => p.startsWith('staff.')) },
     { category: 'Settings', permissions: userPermissions.filter(p => p.startsWith('settings.')) },
     { category: 'Platform', permissions: userPermissions.filter(p => p.startsWith('restaurants.')) },
   ].filter(g => g.permissions.length > 0)
