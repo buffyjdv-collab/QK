@@ -17,11 +17,15 @@ import {
   Building2,
   Globe2,
   CreditCard,
+  Shield,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { signOut } from 'next-auth/react'
-import { hasPermission } from '@/lib/auth'
+import { hasPermission, PERMISSIONS, ROLE_LABELS } from '@/lib/auth'
 import type { Role } from '@/lib/types'
+import { useState } from 'react'
 
 interface NavItem {
   key: string
@@ -130,6 +134,8 @@ export function Sidebar({
           <div className="mt-1 flex items-center gap-1.5">
             <RoleBadge role={role} />
           </div>
+          {/* Permissions Summary */}
+          {role && <PermissionsList role={role} />}
         </div>
         <Button
           variant="ghost"
@@ -145,31 +151,103 @@ export function Sidebar({
   )
 }
 
-// Role badge component with color coding
+// Role badge component with color coding and icon
 function RoleBadge({ role }: { role?: string | null }) {
   if (!role) {
     return (
-      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+        <Shield className="h-3 w-3" />
         Loading...
       </span>
     )
   }
 
-  const roleConfig: Record<string, { label: string; color: string; bgColor: string }> = {
-    SUPER_ADMIN: { label: 'Super Admin', color: 'text-purple-700', bgColor: 'bg-purple-100' },
-    RESTAURANT_OWNER: { label: 'Owner', color: 'text-blue-700', bgColor: 'bg-blue-100' },
-    MANAGER: { label: 'Manager', color: 'text-green-700', bgColor: 'bg-green-100' },
-    KITCHEN_STAFF: { label: 'Chef', color: 'text-orange-700', bgColor: 'bg-orange-100' },
-    WAITER: { label: 'Waiter', color: 'text-cyan-700', bgColor: 'bg-cyan-100' },
-    CASHIER: { label: 'Cashier', color: 'text-pink-700', bgColor: 'bg-pink-100' },
+  const roleConfig: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
+    SUPER_ADMIN: { label: 'Super Admin', color: 'text-purple-700', bgColor: 'bg-purple-100', icon: '🛡️' },
+    RESTAURANT_OWNER: { label: 'Owner', color: 'text-blue-700', bgColor: 'bg-blue-100', icon: '👑' },
+    MANAGER: { label: 'Manager', color: 'text-green-700', bgColor: 'bg-green-100', icon: '📋' },
+    KITCHEN_STAFF: { label: 'Chef', color: 'text-orange-700', bgColor: 'bg-orange-100', icon: '👨‍🍳' },
+    WAITER: { label: 'Waiter', color: 'text-cyan-700', bgColor: 'bg-cyan-100', icon: '🎯' },
+    CASHIER: { label: 'Cashier', color: 'text-pink-700', bgColor: 'bg-pink-100', icon: '💰' },
   }
 
-  const config = roleConfig[role] || { label: role.replace('_', ' '), color: 'text-gray-700', bgColor: 'bg-gray-100' }
+  const config = roleConfig[role] || { label: role.replace('_', ' '), color: 'text-gray-700', bgColor: 'bg-gray-100', icon: '👤' }
 
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${config.color} ${config.bgColor}`}>
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${config.color} ${config.bgColor}`}>
+      <span>{config.icon}</span>
       {config.label}
     </span>
+  )
+}
+
+// Permissions list component - shows what permissions the current role has
+function PermissionsList({ role }: { role: string }) {
+  const [expanded, setExpanded] = useState(false)
+  
+  // Get all permissions that this role has access to
+  const userPermissions = Object.entries(PERMISSIONS)
+    .filter(([, allowedRoles]) => allowedRoles.includes(role))
+    .map(([perm]) => perm)
+  
+  // Group permissions by category for better display
+  const permissionGroups = [
+    { category: 'Dashboard', permissions: userPermissions.filter(p => p.startsWith('dashboard.')) },
+    { category: 'Menu', permissions: userPermissions.filter(p => p.startsWith('menu.')) },
+    { category: 'Orders', permissions: userPermissions.filter(p => p.startsWith('orders.')) },
+    { category: 'Tables', permissions: userPermissions.filter(p => p.startsWith('tables.')) },
+    { category: 'Kitchen', permissions: userPermissions.filter(p => p.startsWith('kitchen.')) },
+    { category: 'Service', permissions: userPermissions.filter(p => p.startsWith('waiter.')) },
+    { category: 'Billing', permissions: userPermissions.filter(p => p.startsWith('billing.') || p.startsWith('payments.')) },
+    { category: 'Reports', permissions: userPermissions.filter(p => p.startsWith('reports.')) },
+    { category: 'Staff', permissions: userPermissions.filter(p => p.startsWith('staff.')) },
+    { category: 'Settings', permissions: userPermissions.filter(p => p.startsWith('settings.')) },
+    { category: 'Platform', permissions: userPermissions.filter(p => p.startsWith('restaurants.')) },
+  ].filter(g => g.permissions.length > 0)
+
+  return (
+    <div className="mt-2 border-t border-slate-200 pt-2">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between text-[10px] font-medium text-slate-600 hover:text-slate-900"
+      >
+        <span className="flex items-center gap-1">
+          <Shield className="h-3 w-3" />
+          {userPermissions.length} Permissions
+        </span>
+        {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+      </button>
+      
+      {expanded && (
+        <div className="mt-1.5 max-h-40 overflow-y-auto space-y-1">
+          {permissionGroups.map(group => (
+            <div key={group.category}>
+              <p className="[font-size:9px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">
+                {group.category}
+              </p>
+              {group.permissions.map(perm => {
+                // Format permission name for display
+                const displayName = perm
+                  .split('.')
+                  .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                  .join(' ')
+                
+                return (
+                  <div 
+                    key={perm} 
+                    className="flex items-center gap-1 rounded bg-white px-1.5 py-0.5 text-[9px] text-slate-600"
+                    title={perm}
+                  >
+                    <span className="h-1 w-1 rounded-full bg-green-500" />
+                    {displayName}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

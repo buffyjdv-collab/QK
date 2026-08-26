@@ -44,10 +44,13 @@ export function AppShell() {
   const qc = useQueryClient()
   const [socketError, setSocketError] = useState(false)
 
-  // Extract role from session with safe defaults
-  const role = (session?.user as any)?.role as string | undefined
-  const restaurantName = (session?.user as any)?.restaurantName as string | undefined
-  const userName = (session?.user as any)?.name as string | undefined
+  // Extract role from session with proper typing
+  const role = session?.user?.role
+  const restaurantName = session?.user?.restaurantName
+  const userName = session?.user?.name
+  
+  // Debug: log session info to help troubleshoot
+  console.log('[AppShell] Session status:', status, 'Role:', role, 'User:', userName)
 
   // Determine default view based on role - only when session is loaded
   useEffect(() => {

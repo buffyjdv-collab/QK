@@ -64,7 +64,11 @@ export default function ErrorBoundary({
               <div className="text-xs font-mono text-red-700 bg-white rounded p-2 overflow-auto max-h-40">
                 <strong>Error:</strong> {error.name}<br/>
                 <strong>Message:</strong> {error.message}<br/>
-                {error.digest && <strong>Digest:</strong> {error.digest}}
+                {error.digest && (
+                  <>
+                    <strong>Digest:</strong> {error.digest}
+                  </>
+                )}
               </div>
               <pre className="text-xs font-mono text-red-600 bg-white rounded p-2 overflow-auto max-h-32">
                 {error.stack}
