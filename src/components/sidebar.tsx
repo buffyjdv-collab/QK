@@ -63,15 +63,20 @@ export function Sidebar({
   userName,
   onNavigate,
 }: {
-  role: string
+  role?: string | null
   activeKey: string
   restaurantName?: string | null
   userName?: string | null
   onNavigate?: (key: string) => void
 }) {
+  // Handle undefined/null role gracefully - show all items if no role (loading state)
+  // or filter by permission if role exists
   const visible = NAV.filter(
-    (n) => !n.permission || hasPermission(role, n.permission),
+    (n) => !n.permission || !role || hasPermission(role, n.permission),
   )
+  
+  // Debug: log role and visible items count
+  console.log('[Sidebar] Role:', role, 'Visible items:', visible.length)
   const platformItems = visible.filter((n) => n.group === 'platform')
   const restaurantItems = visible.filter((n) => n.group === 'restaurant')
   const isPlatformView = activeKey.startsWith('platform-')
@@ -122,9 +127,9 @@ export function Sidebar({
       <div className="border-t border-slate-200 p-2">
         <div className="mb-2 rounded-lg bg-slate-50 px-3 py-2">
           <p className="text-xs font-semibold text-slate-900">{userName || 'Signed in'}</p>
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            {(role || 'staff').replace('_', ' ')}
-          </p>
+          <div className="mt-1 flex items-center gap-1.5">
+            <RoleBadge role={role} />
+          </div>
         </div>
         <Button
           variant="ghost"
@@ -137,6 +142,34 @@ export function Sidebar({
         </Button>
       </div>
     </aside>
+  )
+}
+
+// Role badge component with color coding
+function RoleBadge({ role }: { role?: string | null }) {
+  if (!role) {
+    return (
+      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+        Loading...
+      </span>
+    )
+  }
+
+  const roleConfig: Record<string, { label: string; color: string; bgColor: string }> = {
+    SUPER_ADMIN: { label: 'Super Admin', color: 'text-purple-700', bgColor: 'bg-purple-100' },
+    RESTAURANT_OWNER: { label: 'Owner', color: 'text-blue-700', bgColor: 'bg-blue-100' },
+    MANAGER: { label: 'Manager', color: 'text-green-700', bgColor: 'bg-green-100' },
+    KITCHEN_STAFF: { label: 'Chef', color: 'text-orange-700', bgColor: 'bg-orange-100' },
+    WAITER: { label: 'Waiter', color: 'text-cyan-700', bgColor: 'bg-cyan-100' },
+    CASHIER: { label: 'Cashier', color: 'text-pink-700', bgColor: 'bg-pink-100' },
+  }
+
+  const config = roleConfig[role] || { label: role.replace('_', ' '), color: 'text-gray-700', bgColor: 'bg-gray-100' }
+
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${config.color} ${config.bgColor}`}>
+      {config.label}
+    </span>
   )
 }
 

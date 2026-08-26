@@ -26,13 +26,23 @@ import { useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
 export function AppShell() {
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const [hash, setHash] = useState<string>('dashboard')
   const qc = useQueryClient()
 
-  // Determine default view based on role
+  // Extract role from session with fallback
+  const role = (session?.user as any)?.role as string | undefined
+  const restaurantName = (session?.user as any)?.restaurantName as string | undefined
+  const userName = (session?.user as any)?.name as string | undefined
+
+  // Debug: log session status and role
+  console.log('[AppShell] Session status:', status, 'Role:', role)
+
+  // Determine default view based on role - only when session is loaded
   useEffect(() => {
-    const role = (session?.user as any)?.role
+    // Don't set default view until session is loaded and we have a role
+    if (status === 'loading' || !role) return
+    
     const apply = () => {
       const h = window.location.hash.replace('#', '')
       if (h) {
@@ -56,7 +66,7 @@ export function AppShell() {
     apply()
     window.addEventListener('hashchange', apply)
     return () => window.removeEventListener('hashchange', apply)
-  }, [session?.user])
+  }, [status, role])
 
   // Real-time event handling
   useSocketEvent('order:new', (payload: any) => {
@@ -92,9 +102,17 @@ export function AppShell() {
     qc.invalidateQueries({ queryKey: ['admin-dashboard'] })
   })
 
-  const role = (session?.user as any)?.role as string
-  const restaurantName = (session?.user as any)?.restaurantName as string | undefined
-  const userName = (session?.user as any)?.name as string | undefined
+  // Show loading state while session is being fetched
+  if (status === 'loading') {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-600 border-t-transparent mx-auto mb-3" />
+          <p className="text-sm text-slate-500">Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   // For mobile, sidebar is hidden behind a toggle
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -104,7 +122,7 @@ export function AppShell() {
       {/* Desktop sidebar */}
       <div className="hidden md:block">
         <Sidebar
-          role={role}
+          role={role || null}
           activeKey={hash}
           restaurantName={restaurantName}
           userName={userName}
@@ -124,7 +142,7 @@ export function AppShell() {
           />
           <div className="absolute left-0 top-0 h-full">
             <Sidebar
-              role={role}
+              role={role || null}
               activeKey={hash}
               restaurantName={restaurantName}
               userName={userName}
