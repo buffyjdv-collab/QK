@@ -1,0 +1,7 @@
+{
+  "buildCommand": "npm run build",
+  "framework": "nextjs",
+  "env": {
+    "NEXTAUTH_URL": "https://qk-azvuydzvm-buffyjdv-8717s-projects.vercel.app"
+  }
+}

@@ -53,7 +53,9 @@ export function MobileBottomNav({
   const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0)
 
   // Don't render on desktop or if mobile detection hasn't completed
-  if (!isMobile) return null
+  // Return null only when we've confirmed it's NOT mobile (isMobile === false)
+  // When undefined (loading), don't render to avoid hydration mismatch
+  if (isMobile === false) return null
 
   const handleNavClick = (viewId: View) => {
     if (viewId === 'cart') {
