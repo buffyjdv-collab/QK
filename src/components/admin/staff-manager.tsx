@@ -28,7 +28,7 @@ import { Plus, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { LoadingSpinner, EmptyState, ButtonWithLoading } from '@/components/restaurant/loading-states'
 import { ConfirmDialog } from '@/components/restaurant/confirm-dialog'
-import { ROLE_LABELS } from '@/lib/auth'
+import { ROLE_LABELS } from '@/lib/permissions'
 
 const ROLE_TINT: Record<string, string> = {
   SUPER_ADMIN: 'bg-purple-100 text-purple-700',

@@ -33,7 +33,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { signOut } from 'next-auth/react'
-import { hasPermission, PERMISSIONS, ROLE_LABELS } from '@/lib/auth'
+import { hasPermission, PERMISSIONS, ROLE_LABELS } from '@/lib/permissions'
 import type { Role } from '@/lib/types'
 import { useState } from 'react'
 

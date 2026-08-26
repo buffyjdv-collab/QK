@@ -17,7 +17,7 @@ import {
   Search,
   Loader2,
 } from 'lucide-react'
-import { ROLE_LABELS } from '@/lib/auth'
+import { ROLE_LABELS } from '@/lib/permissions'
 import { formatRelative } from '@/lib/format'
 
 interface PlatformUser {
