@@ -34,19 +34,30 @@ export function LandingPage() {
     setLoading(true)
     try {
       const res = await signIn('credentials', {
-        email,
+        email: email.toLowerCase().trim(),
         password,
         redirect: false,
       })
+      
       if (res?.error) {
+        console.error('[Login] Error:', res.error)
         toast.error('Invalid email or password')
-      } else {
+      } else if (res?.ok) {
         toast.success('Signed in — welcome back!')
         // Force a refresh so server component re-reads session
-        setTimeout(() => window.location.reload(), 200)
+        // Use replace to avoid history issues
+        try {
+          window.location.replace(window.location.pathname)
+        } catch (reloadErr) {
+          console.warn('[Login] Reload error, trying fallback:', reloadErr)
+          window.location.reload()
+        }
+      } else {
+        toast.warning('Unexpected response. Please try again.')
       }
     } catch (err) {
-      toast.error('Sign-in failed')
+      console.error('[Login] Exception:', err)
+      toast.error('Sign-in failed. Please check your connection.')
     } finally {
       setLoading(false)
     }
